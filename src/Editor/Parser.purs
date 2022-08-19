@@ -1,12 +1,4 @@
-module Editor.Parser
-  ( anyBetween
-  , blockP
-  , line
-  , markdownP
-  , nl
-  , nl'
-  )
-  where
+module Editor.Parser where
 
 import Editor.Types
 import Prelude
@@ -54,17 +46,29 @@ line p = do
         Just _  -> do
           P.ParseState input2 _ _ <- P.getParserT
           pure $ Done input2
-  
+
+failMaybe :: forall a. String -> Parser (Maybe a) -> Parser a
+failMaybe err p = p >>= case _ of 
+  Nothing -> P.fail err
+  Just a -> pure a
+
+intP :: Parser Int
+intP = failMaybe "Failed to read digit"
+        $ Int.fromString <<< String.fromCharArray <<< NEL.toUnfoldable
+       <$> P.many1 P.digit
+
+indentP :: Parser Indent
+indentP = P.choice
+  [ IN <$ P.string "  "
+  , UL <$ P.string "- "
+  , OL <$> intP <* P.string ". "
+  ]
+
 blockP :: Parser (Block String)
 blockP = P.choice
   [ Code       <$> blockBetween (P.string "```")
   , BlockQuote <$> (P.string "> " *> line P.anyCodePoint)
-  , UL <<< P   <$> (P.string "- " *> line P.anyCodePoint)
-  , Int.fromString <<< String.fromCharArray <<< NEL.toUnfoldable
-      <$> P.many1 P.digit <* P.string ". "
-      >>= case _ of 
-        Nothing -> P.fail "Failed to read digit"
-        Just n -> OL n <<< P <$> line P.anyCodePoint
+  , Indented <$> indentP <*> (P <$> (P.string "- " *> line P.anyCodePoint))
   , HR         <$  P.replicateM 3 (P.char '-') <* line (P.char '-')
   , P          <$> line P.anyCodePoint
   ] <* nl'

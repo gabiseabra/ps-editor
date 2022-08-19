@@ -4,12 +4,24 @@ import Prelude
 
 import Data.Generic.Rep (class Generic)
 
+data Indent
+  = IN
+  | UL
+  | OL Int
+
+derive instance genericIndent :: Generic Indent _
+derive instance eqIndent :: Eq Indent
+
+instance showIndent :: Show Indent where
+  show IN = "IN"
+  show UL = "UL"
+  show (OL n) = "OL " <> show n
+
 data Block a
   = P a
   | BlockQuote a
   | Code a
-  | UL (Block a)
-  | OL Int (Block a)
+  | Indented Indent (Block a)
   | HR
 
 derive instance genericBlock :: Generic (Block a) _
@@ -20,10 +32,8 @@ instance showBlock :: Show a => Show (Block a) where
   show (P a) = "P " <> show a
   show (BlockQuote a) = "BlockQuote " <> show a
   show (Code a) = "Code " <> show a
-  show (UL bs) = "UL " <> show bs
-  show (OL n bs) = "OL " <> show n <> " " <> show bs
+  show (Indented i bs) = show i <> " " <> show bs
   show HR = "HR"
-
 
 data Inline a
   = B a
