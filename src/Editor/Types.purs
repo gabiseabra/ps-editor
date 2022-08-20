@@ -6,6 +6,7 @@ import Data.Generic.Rep (class Generic)
 
 data Indent
   = IN
+  | BQ
   | UL
   | OL Int
 
@@ -14,14 +15,14 @@ derive instance eqIndent :: Eq Indent
 
 instance showIndent :: Show Indent where
   show IN = "IN"
+  show BQ = "BQ"
   show UL = "UL"
   show (OL n) = "OL " <> show n
 
 data Block a
   = P a
-  | BlockQuote a
-  | Code a
-  | Indented Indent (Block a)
+  | Code String
+  | Indented Indent (Array (Block a))
   | HR
 
 derive instance genericBlock :: Generic (Block a) _
@@ -30,7 +31,6 @@ derive instance functorBlock :: Functor Block
 
 instance showBlock :: Show a => Show (Block a) where
   show (P a) = "P " <> show a
-  show (BlockQuote a) = "BlockQuote " <> show a
   show (Code a) = "Code " <> show a
   show (Indented i bs) = show i <> " " <> show bs
   show HR = "HR"

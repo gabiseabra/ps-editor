@@ -27,6 +27,12 @@ to generate this file without the comments in this block.
   , "tuples"
   , "partial"
   , "integers"
+  , "aff"
+  , "arrays"
+  , "spec"
+  , "spec-discovery"
+  , "exceptions"
+  , "transformers"
   ]
 , packages = ./packages.dhall
 , sources = [ "src/**/*.purs", "test/**/*.purs" ]

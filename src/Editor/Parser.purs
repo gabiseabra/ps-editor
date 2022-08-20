@@ -70,8 +70,9 @@ intP = failMaybe "Failed to read digit"
        <$> P.many1 P.digit
 
 indentP :: Parser Indent
-indentP = P.choice
+indentP = P.try $ P.choice
   [ IN <$ P.string "  "
+  , BQ <$ P.string "> "
   , UL <$ P.string "- "
   , OL <$> intP <* P.string ". "
   ]
@@ -79,8 +80,7 @@ indentP = P.choice
 blockP :: Parser (Block String)
 blockP = fix \blockP' -> P.choice
   [ Code       <$> blockBetween (P.string "```")
-  , BlockQuote <$> multiLine_ (P.string "> ")
-  , Indented   <$> indentP <*> blockP'
+  , Indented   <$> indentP <*> map pure blockP'
   , HR         <$  P.replicateM 3 (P.char '-') <* line (P.char '-')
   , P          <$> line_
   ]
