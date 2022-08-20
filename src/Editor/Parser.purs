@@ -4,6 +4,7 @@ import Editor.Types
 import Prelude
 
 import Control.Alt ((<|>))
+import Control.Lazy (fix)
 import Control.Monad.Rec.Class (Step(..), tailRecM)
 import Data.Either (Either(..))
 import Data.Int as Int
@@ -12,7 +13,7 @@ import Data.List.NonEmpty as NEL
 import Data.Maybe (Maybe(..))
 import Data.String as String
 import Data.String.CodeUnits (fromCharArray) as String
-import Data.String.Regex.Flags (noFlags)
+import Data.String.Regex.Flags (multiline, noFlags)
 import Data.Tuple (Tuple, fst)
 import Debug as Debug
 import Parsing as P
@@ -40,12 +41,23 @@ line p = do
   where
     go unit =
       P.optionMaybe (P.lookAhead nl') >>= case _ of
-        Nothing -> do
-          void p
-          pure $ Loop unit
-        Just _  -> do
-          P.ParseState input2 _ _ <- P.getParserT
-          pure $ Done input2
+        Nothing -> void p $> Loop unit
+        Just _  -> P.getParserT <#> \(P.ParseState i2 _ _) -> Done i2
+
+line_ :: Parser String
+line_ = line P.anyCodePoint
+
+multiLine :: forall a b. Parser a -> Parser b -> Parser String
+multiLine prefix p = "" `flip tailRecM` \acc -> do
+  void $ prefix
+  ln <- line p
+  let acc' = acc <> ln
+  P.optionMaybe (P.lookAhead (nl *> void prefix)) >>= case _ of
+    Nothing -> pure $ Done acc'
+    Just _  -> nl $> Loop (acc' <> "\n")
+
+multiLine_ :: forall a. Parser a -> Parser String
+multiLine_ a = multiLine a P.anyCodePoint
 
 failMaybe :: forall a. String -> Parser (Maybe a) -> Parser a
 failMaybe err p = p >>= case _ of 
@@ -65,13 +77,19 @@ indentP = P.choice
   ]
 
 blockP :: Parser (Block String)
-blockP = P.choice
+blockP = fix \blockP' -> P.choice
   [ Code       <$> blockBetween (P.string "```")
-  , BlockQuote <$> (P.string "> " *> line P.anyCodePoint)
-  , Indented <$> indentP <*> (P <$> (P.string "- " *> line P.anyCodePoint))
+  , BlockQuote <$> multiLine_ (P.string "> ")
+  , Indented   <$> indentP <*> blockP'
   , HR         <$  P.replicateM 3 (P.char '-') <* line (P.char '-')
-  , P          <$> line P.anyCodePoint
-  ] <* nl'
+  , P          <$> line_
+  ]
+
+-- mergeBlocks :: forall a. Block a -> Block a -> Maybe (Block a)
+-- mergeBlocks (Indented i a) (Indented j b)
+-- mergeBlocks (Indented i a) (Indented j b)
+--   | i == j , Just c <- mergeBlocks a b = Just (Indented i c)
+-- mergeBlocks _ _ = Nothing
 
 markdownP :: Parser (List (Block String))
-markdownP = P.manyTill blockP P.eof
+markdownP = P.manyTill (blockP <* nl') P.eof
