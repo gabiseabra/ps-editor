@@ -16,10 +16,10 @@ class BlockDef a where
   blockParser :: forall b
     .  (a -> b)
     -> { blockP :: Parser (Block' String b)
-      , pureP :: Parser String
-      , textP :: Parser String
-      , unitP :: Parser Unit
-      }
+        , pureP :: Parser String
+        , textP :: Parser String
+        , unitP :: Parser Unit
+        }
     -> Parser (Block' String b)
   blockFormatter :: a -> Array String -> Array String
 
