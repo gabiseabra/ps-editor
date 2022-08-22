@@ -1,26 +1,25 @@
 module Editor.Syntax.Basic where
 
-import Editor.Block.AST
-import Editor.Internal.RL ((#:), (<>#))
+import Editor.AST
 import Prelude
 
 import Data.Tuple.Nested ((/\))
 import Parsing.Combinators.Array (many) as P
 import Parsing.String (string) as P
-import Type.Proxy (Proxy(..))
 
-pBlock = BlockDef
-  { kind: Pure
-  , format: \_ as -> as
-  , parse: \p -> (unit /\ _) <$> map pure p
-  } :: BlockDef Unit
+data P = P
 
-ulBlock = BlockDef
-  { kind: Block
-  , format: \_ -> map \a -> "- " <> a
-  , parse: \p -> (unit /\ _) <$> P.many (P.string "- " *> p)
-  } :: BlockDef Unit
+instance blockTypeP :: BlockType P where
+  blockKind _ = Pure
+  formatBlock _ = identity
+  parseBlock p = (P /\ _) <$> map pure p
 
-basicSyntax
-  =   (Proxy :: Proxy "ul") #: ulBlock
-  <># (Proxy :: Proxy "p") #: pBlock
+data UL = UL
+
+instance blockTypeUL :: BlockType UL where
+  blockKind _ = Pure
+  formatBlock _ = map \a -> "- " <> a
+  parseBlock p = (UL /\ _) <$> P.many (P.string "- " *> p)
+
+type BasicSyntax = UL || P
+
