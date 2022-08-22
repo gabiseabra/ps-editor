@@ -37,10 +37,13 @@ line :: forall a. Parser a -> Parser String
 line p = do
   P.ParseState input1 _ _ <- P.getParserT
   input2 <- tailRecM go unit
-  pure $ String.take (String.length input1 - String.length input2) input1
+  let out = String.take (String.length input1 - String.length input2) input1
+  if String.length out == 0
+    then P.fail "EOF"
+    else pure out
   where
     go unit =
-      P.optionMaybe (P.lookAhead nl') >>= case _ of
+      P.optionMaybe nl' >>= case _ of
         Nothing -> void p $> Loop unit
         Just _  -> P.getParserT <#> \(P.ParseState i2 _ _) -> Done i2
 

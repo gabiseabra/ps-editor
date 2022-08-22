@@ -18,7 +18,7 @@ import Matryoshka (cata)
 data BlockKind
   = Block
   | Pure
-  -- | Text
+  | Text
   | Unit
 
 derive instance genericBlockKind :: Generic BlockKind _
@@ -28,7 +28,7 @@ instance showBlockKind :: Show BlockKind where show = genericShow
 data BlockF a r
   = BlockF (Array r)
   | PureF (Array a)
-  | TextF String
+  | TextF (Array String)
   | UnitF
 
 instance functorBlockF :: Functor (BlockF a) where
