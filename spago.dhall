@@ -20,6 +20,7 @@ to generate this file without the comments in this block.
   , "debug"
   , "effect"
   , "either"
+  , "exceptions"
   , "free"
   , "identity"
   , "integers"

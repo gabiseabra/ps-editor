@@ -18,6 +18,7 @@ import Parsing.Combinators (optionMaybe) as P
 import Parsing.Combinators.Array (many, many1) as P
 import Parsing.String (string) as P
 import Parsing.String.Basic (letter) as P
+import Type.Proxy (Proxy(..))
 
 data P = P
 
@@ -62,3 +63,5 @@ instance blockTypeCode :: BlockType Code where
     pure (Code lang /\ body)
 
 type BasicSyntax = Code || UL || P
+
+basicSyntax = Proxy :: Proxy BasicSyntax

@@ -78,7 +78,7 @@ instance showBlock :: ( Show a, Show r ) => Show (Block a r) where
   show (B c) = c `flip cata` \(EnvT (r /\ block)) ->
     show r <> ":<(" <> (
       case block of
-        (BlockF bs) -> "BlockF " <> "[" <> String.joinWith ", " bs <> "]"
+        (BlockF bs) -> "BlockF " <> "[" <> String.joinWith "," bs <> "]"
         b -> show b
     ) <> ")"
 
