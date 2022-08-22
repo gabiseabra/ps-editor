@@ -38,6 +38,7 @@ to generate this file without the comments in this block.
   , "record"
   , "foreign"
   , "foreign-object"
+  , "matryoshka"
   ]
 , packages = ./packages.dhall
 , sources = [ "src/**/*.purs", "test/**/*.purs" ]
