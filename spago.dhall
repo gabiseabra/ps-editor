@@ -33,6 +33,11 @@ to generate this file without the comments in this block.
   , "spec-discovery"
   , "exceptions"
   , "transformers"
+  , "variant"
+  , "typelevel-prelude"
+  , "record"
+  , "foreign"
+  , "foreign-object"
   ]
 , packages = ./packages.dhall
 , sources = [ "src/**/*.purs", "test/**/*.purs" ]
