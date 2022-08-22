@@ -3,44 +3,67 @@ module Editor.Lexer where
 import Prelude
 
 import Control.Alt ((<|>))
-import Control.Monad.Reader (ReaderT)
+import Control.Monad.Reader (ReaderT, lift)
+import Control.Monad.Reader as Reader
 import Control.Monad.Rec.Class (Step(..), tailRecM)
 import Data.Identity (Identity)
 import Data.Int as Int
 import Data.List.NonEmpty as NEL
-import Data.Maybe (Maybe(..))
+import Data.Maybe (Maybe(..), maybe)
 import Data.String as String
 import Data.String.CodeUnits (fromCharArray) as String
 import Data.Tuple (fst)
+import Data.Tuple.Nested (type (/\), (/\))
 import Debug as Debug
 import Parsing as P
 import Parsing.Combinators as P
 import Parsing.String as P
 import Parsing.Token (digit) as P
 
-type ScopeCtx =
-  { indent :: Array Int
+type Scope =
+  { indent :: Int
+  , pos :: P.Position
   }
 
-type Parser = P.ParserT String (Identity)
+emptyScope = { indent: 0, pos: P.initialPos } :: Scope
 
-nl = void $ P.char '\n'
-nl' = nl <|> P.eof
+type Parser = P.ParserT String (ReaderT Scope Identity)
 
-anyBetween :: forall a. Parser a -> Parser a -> Parser String
-anyBetween open close = P.tryRethrow $ (void open) *> (fst <$> P.anyTill (void close))
+indentP :: Parser Unit
+indentP = scopeLine >>= case _ of
+  0 -> pure unit
+  _ -> do
+    { indent } <- lift Reader.ask
+    void $ P.replicateM indent $ P.string "  "
 
-blockBetween :: forall a. Parser a -> Parser String
-blockBetween p = anyBetween (void p <* nl) (nl *> void p)
+indented :: forall p. Parser p -> Parser p
+indented p = do
+  pos <- P.position
+  p `flip P.mapParserT` Reader.local \(s :: Scope) ->
+    s { indent = s.indent + 1
+      , pos = pos
+      }
 
+scopeLine :: Parser Int
+scopeLine = do
+  { pos: P.Position { line } } <- lift Reader.ask
+  (P.Position { line: line' }) <- P.position
+  pure (line' - line)
+
+nl = void $ P.char '\n' :: Parser Unit
+nl' = nl <|> P.eof :: Parser Unit
+
+nextLine :: Parser Unit
+nextLine = nl *> indentP
+
+-- Consume the contents of a single line but not the newline character
+-- TODO: keep going if the line ends in 2 spaces or backslash
 line :: forall a. Parser a -> Parser String
 line p = do
+  P.optionMaybe P.eof >>= maybe (pure unit) (const $ P.fail "EOF")
   P.ParseState input1 _ _ <- P.getParserT
   input2 <- tailRecM go unit
-  let out = String.take (String.length input1 - String.length input2) input1
-  if String.length out == 0
-    then P.fail "EOF"
-    else pure out
+  pure $ String.take (String.length input1 - String.length input2) input1
   where
     go unit =
       P.optionMaybe nl' >>= case _ of
@@ -49,18 +72,6 @@ line p = do
 
 line_ :: Parser String
 line_ = line P.anyCodePoint
-
-multiLine :: forall a b. Parser a -> Parser b -> Parser String
-multiLine prefix p = "" `flip tailRecM` \acc -> do
-  void $ prefix
-  ln <- line p
-  let acc' = acc <> ln
-  P.optionMaybe (P.lookAhead (nl *> void prefix)) >>= case _ of
-    Nothing -> pure $ Done acc'
-    Just _  -> nl $> Loop (acc' <> "\n")
-
-multiLine_ :: forall a. Parser a -> Parser String
-multiLine_ a = multiLine a P.anyCodePoint
 
 failMaybe :: forall a. String -> Parser (Maybe a) -> Parser a
 failMaybe err p = p >>= case _ of 

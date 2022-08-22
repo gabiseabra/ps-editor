@@ -9,6 +9,7 @@ import Control.Lazy (fix)
 import Data.Either (Either(..))
 import Data.Tuple.Nested ((/\))
 import Editor.Lexer (Parser, line_)
+import Parsing.Combinators (try)
 import Type.Proxy (Proxy(..))
 
 class BlockDef a where
@@ -23,7 +24,7 @@ class BlockDef a where
   blockFormatter :: a -> Array String -> Array String
 
 instance blockDefEither :: ( BlockDef a, BlockDef b ) => BlockDef (Either a b) where
-  blockParser f p = a <|> b
+  blockParser f p = try a <|> b
     where a = blockParser (f <<< Left) p
           b = blockParser (f <<< Right) p
   blockFormatter (Left a) = blockFormatter a
