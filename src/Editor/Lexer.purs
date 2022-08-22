@@ -1,28 +1,28 @@
-module Editor.Parser where
+module Editor.Lexer where
 
-import Editor.Types
 import Prelude
 
 import Control.Alt ((<|>))
-import Control.Lazy (fix)
+import Control.Monad.Reader (ReaderT)
 import Control.Monad.Rec.Class (Step(..), tailRecM)
-import Data.Either (Either(..))
+import Data.Identity (Identity)
 import Data.Int as Int
-import Data.List (List)
 import Data.List.NonEmpty as NEL
 import Data.Maybe (Maybe(..))
 import Data.String as String
 import Data.String.CodeUnits (fromCharArray) as String
-import Data.String.Regex.Flags (multiline, noFlags)
-import Data.Tuple (Tuple, fst)
+import Data.Tuple (fst)
 import Debug as Debug
 import Parsing as P
 import Parsing.Combinators as P
 import Parsing.String as P
 import Parsing.Token (digit) as P
-import Partial.Unsafe (unsafeCrashWith)
 
-type Parser = P.Parser String
+type ScopeCtx =
+  { indent :: Array Int
+  }
+
+type Parser = P.ParserT String (Identity)
 
 nl = void $ P.char '\n'
 nl' = nl <|> P.eof
@@ -68,28 +68,3 @@ intP :: Parser Int
 intP = failMaybe "Failed to read digit"
         $ Int.fromString <<< String.fromCharArray <<< NEL.toUnfoldable
        <$> P.many1 P.digit
-
-indentP :: Parser Indent
-indentP = P.try $ P.choice
-  [ IN <$ P.string "  "
-  , BQ <$ P.string "> "
-  , UL <$ P.string "- "
-  , OL <$> intP <* P.string ". "
-  ]
-
-blockP :: Parser (Block String)
-blockP = fix \blockP' -> P.choice
-  [ Code       <$> blockBetween (P.string "```")
-  , Indented   <$> indentP <*> map pure blockP'
-  , HR         <$  P.replicateM 3 (P.char '-') <* line (P.char '-')
-  , P          <$> line_
-  ]
-
--- mergeBlocks :: forall a. Block a -> Block a -> Maybe (Block a)
--- mergeBlocks (Indented i a) (Indented j b)
--- mergeBlocks (Indented i a) (Indented j b)
---   | i == j , Just c <- mergeBlocks a b = Just (Indented i c)
--- mergeBlocks _ _ = Nothing
-
-markdownP :: Parser (List (Block String))
-markdownP = P.manyTill (blockP <* nl') P.eof
