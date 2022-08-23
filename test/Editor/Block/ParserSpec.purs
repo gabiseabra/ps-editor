@@ -87,16 +87,50 @@ b
   , B $ inj (Code (Just "code")) :< TextF ["b\n"]
   ] :: Test
 
-simpleListSpec = """
+simpleBlockquoteSpec = """
+> a
+  b
+
+> # x
+> - a
+>   - b
+""" `runTest` 
+  [ B $ inj Blockquote :< BlockF
+    [ inj P :< PureF ["a\n"]
+    , inj P :< PureF ["b\n"]
+    ]
+  , B $ inj P :< PureF ["\n"]
+  , B $ inj Blockquote :< BlockF
+    [ inj H1 :< PureF ["x\n"]
+    , inj UL :< BlockF
+      [ inj P :< PureF ["a\n"]
+      , inj UL :< BlockF
+        [ inj P :< PureF ["b"]
+        ]
+      ]
+    ]
+  ] :: Test
+
+simpleUnorderedListSpec = """
 - a
 - b
   c
 """ `runTest` 
-  [ B $ inj UL :< (BlockF [ inj P :< PureF ["a\n"] ])
-  , B $ inj UL :< (BlockF
+  [ B $ inj UL :< BlockF [ inj P :< PureF ["a\n"] ]
+  , B $ inj UL :< BlockF
       [ inj P :< PureF ["b\n"]
       , inj P :< PureF ["c"]
-      ])
+      ]
+  ] :: Test
+
+simpleOrderedListSpec = """
+1. a
+2. b
+420. c
+""" `runTest` 
+  [ B $ inj (OL 1) :< (BlockF [ inj P :< PureF ["a\n"] ])
+  , B $ inj (OL 2) :< (BlockF [ inj P :< PureF ["b\n"] ])
+  , B $ inj (OL 420) :< (BlockF [ inj P :< PureF ["c"] ])
   ] :: Test
 
 nestedListSpec = """
@@ -130,5 +164,7 @@ spec =
     it "simpleThematicBreak" simpleThematicBreakSpec
     it "simpleParagraph" simpleParagraphSpec
     it "simpleCode" simpleCodeSpec
-    it "simpleList" simpleListSpec
+    it "simpleBlockquote" simpleBlockquoteSpec
+    it "simpleUnorderedList" simpleUnorderedListSpec
+    it "simpleOrderedList" simpleOrderedListSpec
     it "nestedList" nestedListSpec

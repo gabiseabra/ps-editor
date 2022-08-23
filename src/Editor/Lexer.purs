@@ -6,55 +6,58 @@ import Control.Alt ((<|>))
 import Control.Monad.Reader (ReaderT, lift)
 import Control.Monad.Reader as Reader
 import Control.Monad.Rec.Class (Step(..), tailRecM)
+import Data.Array (foldr)
 import Data.Identity (Identity)
 import Data.Int as Int
 import Data.List.NonEmpty as NEL
 import Data.Maybe (Maybe(..), maybe)
 import Data.String as String
 import Data.String.CodeUnits (fromCharArray) as String
-import Data.Tuple (fst)
-import Data.Tuple.Nested (type (/\), (/\))
 import Debug as Debug
 import Parsing as P
 import Parsing.Combinators as P
 import Parsing.String as P
 import Parsing.Token (digit) as P
 
-type Scope =
-  { indent :: Int
+data Scope = Scope
+  { indent :: Array (Parser Unit)
   , pos :: P.Position
   }
 
-emptyScope = { indent: 0, pos: P.initialPos } :: Scope
-
 type Parser = P.ParserT String (ReaderT Scope Identity)
 
-indentP :: Parser Unit
-indentP = scopeLine >>= case _ of
-  0 -> pure unit
-  _ -> do
-    { indent } <- lift Reader.ask
-    void $ P.replicateM indent $ P.string "  "
+emptyScope = Scope { indent: [], pos: P.initialPos } :: Scope
 
-indented :: forall p. Parser p -> Parser p
-indented p = do
-  pos <- P.position
-  p `flip P.mapParserT` Reader.local \(s :: Scope) ->
-    s { indent = s.indent + 1
-      , pos = pos
-      }
+getScope = lift Reader.ask :: Parser Scope
 
-scopeLine :: Parser Int
-scopeLine = do
-  { pos: P.Position { line } } <- lift Reader.ask
-  (P.Position { line: line' }) <- P.position
+getScopeLine :: Parser Int
+getScopeLine = do
+  Scope { pos: P.Position { line } } <- getScope
+  P.Position { line: line' } <- P.position
   pure (line' - line)
 
 nl = void $ P.char '\n' :: Parser Unit
 nl' = nl <|> P.eof :: Parser Unit
+indent = void $ P.string "  " :: Parser Unit
 
-nextLine :: Parser Unit
-nextLine = nl *> indentP
+indentP :: Parser Unit
+indentP = getScopeLine >>= case _ of
+  0 -> pure unit
+  _ -> do
+    Scope { indent } <- getScope
+    foldr (\p p' -> p' *> p) (pure unit) indent
+
+indented :: forall p. Parser Unit -> Parser p -> Parser p
+indented i p = do
+  pos <- P.position
+  p `flip P.mapParserT` Reader.local \(Scope s) ->
+    Scope
+      { indent: [i] <> s.indent
+      , pos: pos
+      }
+
+indented_ :: forall p. Parser p -> Parser p
+indented_ = indented indent
 
 -- Consume the contents of a single line but not the newline character
 -- TODO: keep going if the line ends in 2 spaces or backslash

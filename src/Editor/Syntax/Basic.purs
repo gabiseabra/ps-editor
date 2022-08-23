@@ -12,9 +12,9 @@ import Data.Maybe (Maybe(..))
 import Data.Show.Generic (genericShow)
 import Data.String.CodeUnits as String
 import Data.Tuple.Nested ((/\))
-import Debug as Debug
 import Editor.Lexer as P
-import Parsing.Combinators (choice, optionMaybe, try) as P
+import Editor.Syntax as S
+import Parsing.Combinators (choice, optionMaybe) as P
 import Parsing.Combinators.Array (many, many1) as P
 import Parsing.String (char, string) as P
 import Parsing.String.Basic (letter) as P
@@ -88,8 +88,19 @@ instance showUL :: Show UL where show = genericShow
 
 instance blockTypeUL :: BlockType UL where
   blockKind _ = Block
-  formatBlock _ = map \a -> "- " <> a
-  parseBlock p = (UL /\ _) <$> (P.indentP *> P.string "- " *> P.indented (P.many p))
+  formatBlock _ = S.listBlockF "- "
+  parseBlock = S.listBlockP (P.string "- " *> pure UL)
+
+data OL = OL Int
+
+derive instance genericOL :: Generic OL _
+instance eqOL :: Eq OL where eq = genericEq
+instance showOL :: Show OL where show = genericShow
+
+instance blockTypeOL :: BlockType OL where
+  blockKind _ = Block
+  formatBlock (OL n) = S.listBlockF (show n <> ". ")
+  parseBlock = S.listBlockP (OL <$> P.intP <* P.string ". ")
 
 data Code = Code (Maybe String)
 
@@ -99,19 +110,24 @@ instance showCode :: Show Code where show = genericShow
 
 instance blockTypeCode :: BlockType Code where
   blockKind _ = Text
-  formatBlock _ as = ["```"] <> as <> ["```"]
-  parseBlock p = do
-    let langP =   map (String.fromCharArray <<< NEArray.toUnfoldable)
-              <$> P.optionMaybe (P.many1 P.letter)
-        openP = P.indentP *> P.string "```" *> langP <* P.nl
-        closeP = P.indentP *> P.string "```" *> P.nl'
-    lang <- openP
-    body <- [] `flip tailRecM` \acc -> do
-      P.optionMaybe (P.try closeP) >>= case _ of
-        Nothing -> P.indentP *> p <#> \a -> Loop (acc <> [a])
-        Just _ -> pure $ Done acc
-    pure (Code lang /\ body)
+  formatBlock _ = S.fencedBlockF "```" "```"
+  parseBlock = S.fencedBlockP (Code <$> openP) closeP
+    where langP =   map (String.fromCharArray <<< NEArray.toUnfoldable)
+                <$> P.optionMaybe (P.many1 P.letter)
+          openP = P.string "```" *> langP
+          closeP = P.string "```"
 
-type BasicSyntax = Code || H || HR || UL || P
+data Blockquote = Blockquote
+
+derive instance genericBlockquote :: Generic Blockquote _
+instance eqBlockquote :: Eq Blockquote where eq = genericEq
+instance showBlockquote :: Show Blockquote where show = genericShow
+
+instance blockTypeBlockquote :: BlockType Blockquote where
+  blockKind _ = Block
+  formatBlock _ = S.multilineBlockF "> "
+  parseBlock p = (Blockquote /\ _) <$> S.multilineBlockP (void $ P.string "> ") p
+
+type BasicSyntax = Blockquote || Code || H || HR || UL || OL || P
 
 basicSyntax = Proxy :: Proxy BasicSyntax
