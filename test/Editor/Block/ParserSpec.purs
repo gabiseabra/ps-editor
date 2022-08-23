@@ -1,6 +1,9 @@
 module Test.Editor.Syntax.BasicSpec where
 
-import Editor.Syntax.Basic
+import Editor.Syntax.Basic.Block
+import Editor.AST.Block
+import Editor.Lexer (emptyScope, line_)
+import Editor.Syntax (blockP)
 import Prelude
 
 import Control.Comonad.Cofree ((:<))
@@ -10,9 +13,6 @@ import Data.Either (Either(..))
 import Data.Either.Inject (inj)
 import Data.Maybe (Maybe(..))
 import Data.String as String
-import Editor.Block.AST (Block(..), BlockF(..))
-import Editor.Block.Parser (mkBlockParser)
-import Editor.Lexer (emptyScope)
 import Effect.Aff (Aff)
 import Effect.Exception (Error)
 import Parsing (runParserT)
@@ -20,16 +20,17 @@ import Parsing.Combinators.Array (many)
 import Parsing.String (eof)
 import Test.Spec (Spec, describe, it)
 import Test.Spec.Assertions (shouldEqual)
+import Type.Proxy (Proxy(..))
 
 type Test = Aff Unit
 
 runTest :: forall m
   .  MonadThrow Error m
   => String
-  -> Array (Block String BasicSyntax)
+  -> Array (Block BasicBlockSyntax String)
   -> m Unit
 runTest md ast =
-  let p = many (mkBlockParser basicSyntax) <* eof
+  let p = many (blockP Proxy line_) <* eof
   in runReader (runParserT (String.trim md) p) emptyScope
       `shouldEqual` Right ast
 
@@ -43,14 +44,14 @@ simpleHeadingSpec = """
 ####### x
 #x
 """ `runTest` 
-  [ B $ inj H1 :< PureF ["H1\n"]
-  , B $ inj H2 :< PureF ["H2\n"]
-  , B $ inj H3 :< PureF ["H3\n"]
-  , B $ inj H4 :< PureF ["H4\n"]
-  , B $ inj H5 :< PureF ["H5\n"]
-  , B $ inj H6 :< PureF ["H6\n"]
-  , B $ inj P :< PureF ["####### x\n"]
-  , B $ inj P :< PureF ["#x"]
+  [ Block $ inj H1 :< PureF ["H1\n"]
+  , Block $ inj H2 :< PureF ["H2\n"]
+  , Block $ inj H3 :< PureF ["H3\n"]
+  , Block $ inj H4 :< PureF ["H4\n"]
+  , Block $ inj H5 :< PureF ["H5\n"]
+  , Block $ inj H6 :< PureF ["H6\n"]
+  , Block $ inj P :< PureF ["####### x\n"]
+  , Block $ inj P :< PureF ["#x"]
   ] :: Test
 
 simpleThematicBreakSpec = """
@@ -59,10 +60,10 @@ simpleThematicBreakSpec = """
 ***
 * * *
 """ `runTest` 
-  [ B $ inj HR :< UnitF
-  , B $ inj HR :< UnitF
-  , B $ inj HR :< UnitF
-  , B $ inj HR :< UnitF
+  [ Block $ inj HR :< UnitF
+  , Block $ inj HR :< UnitF
+  , Block $ inj HR :< UnitF
+  , Block $ inj HR :< UnitF
   ] :: Test
 
 simpleParagraphSpec = """
@@ -70,9 +71,9 @@ a
 
 b
 """ `runTest` 
-  [ B $ inj P :< PureF ["a\n"]
-  , B $ inj P :< PureF ["\n"]
-  , B $ inj P :< PureF ["b"]
+  [ Block $ inj P :< PureF ["a\n"]
+  , Block $ inj P :< PureF ["\n"]
+  , Block $ inj P :< PureF ["b"]
   ] :: Test
 
 simpleCodeSpec = """
@@ -83,8 +84,8 @@ a
 b
 ```
 """ `runTest` 
-  [ B $ inj (Code Nothing) :< TextF ["a\n"]
-  , B $ inj (Code (Just "code")) :< TextF ["b\n"]
+  [ Block $ inj (Code Nothing) :< TextF ["a\n"]
+  , Block $ inj (Code (Just "code")) :< TextF ["b\n"]
   ] :: Test
 
 simpleBlockquoteSpec = """
@@ -95,16 +96,16 @@ simpleBlockquoteSpec = """
 > - a
 >   - b
 """ `runTest` 
-  [ B $ inj Blockquote :< BlockF
+  [ Block $ inj Blockquote :< NestedF
     [ inj P :< PureF ["a\n"]
     , inj P :< PureF ["b\n"]
     ]
-  , B $ inj P :< PureF ["\n"]
-  , B $ inj Blockquote :< BlockF
+  , Block $ inj P :< PureF ["\n"]
+  , Block $ inj Blockquote :< NestedF
     [ inj H1 :< PureF ["x\n"]
-    , inj UL :< BlockF
+    , inj UL :< NestedF
       [ inj P :< PureF ["a\n"]
-      , inj UL :< BlockF
+      , inj UL :< NestedF
         [ inj P :< PureF ["b"]
         ]
       ]
@@ -116,8 +117,8 @@ simpleUnorderedListSpec = """
 - b
   c
 """ `runTest` 
-  [ B $ inj UL :< BlockF [ inj P :< PureF ["a\n"] ]
-  , B $ inj UL :< BlockF
+  [ Block $ inj UL :< NestedF [ inj P :< PureF ["a\n"] ]
+  , Block $ inj UL :< NestedF
       [ inj P :< PureF ["b\n"]
       , inj P :< PureF ["c"]
       ]
@@ -128,9 +129,9 @@ simpleOrderedListSpec = """
 2. b
 420. c
 """ `runTest` 
-  [ B $ inj (OL 1) :< (BlockF [ inj P :< PureF ["a\n"] ])
-  , B $ inj (OL 2) :< (BlockF [ inj P :< PureF ["b\n"] ])
-  , B $ inj (OL 420) :< (BlockF [ inj P :< PureF ["c"] ])
+  [ Block $ inj (OL 1) :< (NestedF [ inj P :< PureF ["a\n"] ])
+  , Block $ inj (OL 2) :< (NestedF [ inj P :< PureF ["b\n"] ])
+  , Block $ inj (OL 420) :< (NestedF [ inj P :< PureF ["c"] ])
   ] :: Test
 
 nestedListSpec = """
@@ -142,15 +143,15 @@ nestedListSpec = """
     ```
     - * * *
 """ `runTest` 
-  [ B $ inj UL :< (BlockF
+  [ Block $ inj UL :< (NestedF
     [ inj P :< PureF ["a\n"]
-    , inj UL :< (BlockF
+    , inj UL :< (NestedF
       [ inj P :< PureF ["b\n"]
       , inj P :< PureF ["c\n"]
       ])
-    , inj UL :< (BlockF
+    , inj UL :< (NestedF
       [ inj (Code (Just "purs")) :< TextF ["code\n"]
-      , inj UL :< (BlockF
+      , inj UL :< (NestedF
         [ inj HR :< UnitF
         ])
       ])

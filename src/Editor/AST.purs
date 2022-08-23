@@ -1,10 +1,11 @@
-module Editor.AST
-  ( module Editor.Block.AST
-  , type (||)
-  ) where
+module Editor.AST where
 
-import Editor.Block.AST
+import Prelude
 
-import Data.Either (Either)
+import Editor.Lexer (Parser)
+import Data.Tuple.Nested (type (/\))
 
-infixr 6 type Either as ||
+class Element k a | a -> k where
+  kind :: forall proxy. proxy a -> k
+  parse :: forall r. Parser r -> Parser (a /\ Array r)
+  format :: a -> Array String -> Array String

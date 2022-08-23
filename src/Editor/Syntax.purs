@@ -1,53 +1,91 @@
 module Editor.Syntax where
 
+import Editor.AST
+import Editor.AST.Block
+import Editor.AST.Inline
 import Prelude
 
-import Control.Monad.Rec.Class (Step(..), tailRecM)
-import Data.Array as Array
-import Data.Maybe (Maybe(..))
-import Data.Tuple.Nested (type (/\), (/\))
-import Editor.Lexer (Parser)
-import Editor.Lexer (indent, indentP, indented, indented_, nl, nl') as P
-import Parsing.Combinators (choice, optionMaybe, try) as P
-import Parsing.Combinators.Array (many) as P
+import Control.Alt ((<|>))
+import Control.Comonad.Cofree ((:<))
+import Control.Lazy (fix)
+import Control.Monad.Free (wrap)
+import Data.Either (Either(..))
+import Data.Newtype (unwrap)
+import Data.String (fromCodePointArray)
+import Data.Tuple.Nested ((/\))
+import Editor.Lexer (Parser, line_)
+import Parsing.Combinators (try)
+import Parsing.Combinators.Array (many)
+import Parsing.String (anyCodePoint)
+import Type.Proxy (Proxy(..))
 
-listBlockP :: forall prefix p
-  .  Parser prefix
-  -> Parser p
-  -> Parser (prefix /\ Array p)
-listBlockP prefix p = P.indentP *> ((/\) <$> prefix <*> P.indented_ (P.many p))
+infixr 6 type Either as ||
 
-listBlockF :: String -> Array String -> Array String
-listBlockF prefix as = case Array.uncons as of
-  Just { head, tail } -> (prefix <> head) `Array.cons` tail
-  _ -> [prefix]
+data Syntax :: Type -> Type -> Type
+data Syntax block inline = Syntax
 
-fencedBlockP :: forall open close p
-  .  Parser open
-  -> Parser close
-  -> Parser p
-  -> Parser (open /\ Array p)
-fencedBlockP openP closeP p = do
-    open <- P.indentP *> openP <* P.nl
-    body <- [] `flip tailRecM` \acc -> do
-      P.optionMaybe (P.try (P.indentP *> closeP <* P.nl')) >>= case _ of
-        Nothing -> P.indentP *> p <#> \a -> Loop (acc <> [a])
-        Just _ -> pure $ Done acc
-    pure (open /\ body)
+mergeSyntax :: forall a b c d. Syntax a b -> Syntax c d -> Syntax (a || c) (b || d)
+mergeSyntax _ _ = Syntax
 
-fencedBlockF :: String -> String -> Array String -> Array String
-fencedBlockF open close as = [open] <> as <> [close]
+infixr 6 mergeSyntax as ||
 
-multilineBlockP :: forall p
-  .  Parser Unit
-  -> Parser p
-  -> Parser (Array p)
-multilineBlockP prefix p
-  =  P.indentP 
-  *> prefix
-  *> P.indented
-     (P.choice [prefix, P.indent])
-     (P.many p)
+class SyntaxCompiler k f a | k -> f where
+  mkParser :: forall proxy b r
+    .  proxy k
+    -> (a -> b)
+    -> Parser r
+    -> Parser (f b r)
+    -> Parser (f b r)
+  mkFormatter :: forall proxy
+    .  proxy k
+    -> a
+    -> Array String
+    -> Array String
 
-multilineBlockF :: String -> Array String -> Array String
-multilineBlockF prefix = map \a -> prefix <> a
+instance syntaxCompilerEither ::
+  ( SyntaxCompiler k f a
+  , SyntaxCompiler k f b
+  ) => SyntaxCompiler k f (Either a b) where
+  mkParser k f r p = try a <|> b
+    where a = mkParser k (f <<< Left) r p
+          b = mkParser k (f <<< Right) r p
+  mkFormatter k (Left a) = mkFormatter k a
+  mkFormatter k (Right b) = mkFormatter k b
+else instance syntaxCompilerBlock ::
+  ( Element BlockKind a
+  ) => SyntaxCompiler BlockKind Block a where
+  mkFormatter _ = format
+  mkParser _ f r = case kind (Proxy :: Proxy a) of
+    NestedK -> \p -> parse p <#> \(a /\ b) -> Block $ f a :< NestedF (map unwrap b)
+    PureK -> \_ -> parse r <#> \(a /\ b) -> Block $ f a :< PureF b
+    TextK -> \_ -> parse line_ <#> \(a /\ b) -> Block $ f a :< TextF b
+    UnitK -> \_ -> parse (pure unit) <#> \(a /\ _) -> Block $ f a :< UnitF
+else instance syntaxCompilerInline ::
+  ( Element InlineKind a
+  ) => SyntaxCompiler InlineKind Inline a where
+  mkFormatter _ = format
+  mkParser _ f r p = parse p' <#> \(a /\ b) -> Inline $ wrap (InlineF (f a /\ map unwrap b))
+    where p' = try p <|> (Inline <<< pure <$> r)
+
+leafP = fromCodePointArray <$> many anyCodePoint
+
+blockP :: forall proxy a r
+  .  SyntaxCompiler BlockKind Block a
+  => proxy a
+  -> Parser r
+  -> Parser (Block a r)
+blockP _ r = fix $ mkParser (Proxy :: Proxy BlockKind) identity r
+
+inlineP :: forall proxy a r
+  .  SyntaxCompiler InlineKind Inline a
+  => proxy a
+  -> Parser r
+  -> Parser (Inline a r)
+inlineP _ r = fix $ mkParser (Proxy :: Proxy InlineKind) identity r
+
+markdownP :: forall block inline
+  .  SyntaxCompiler BlockKind Block block
+  => SyntaxCompiler InlineKind Inline inline
+  => Syntax block inline
+  -> Parser (Block block (Inline inline String))
+markdownP _ = blockP Proxy $ inlineP Proxy leafP
