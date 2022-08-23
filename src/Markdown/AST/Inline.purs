@@ -2,7 +2,7 @@ module Markdown.AST.Inline where
 
 import Prelude
 
-import Control.Monad.Free (Free)
+import Control.Monad.Free (Free, resume)
 import Data.Bifunctor (class Bifunctor, bimap)
 import Data.Either (Either(..))
 import Data.Eq (class Eq1)
@@ -12,9 +12,10 @@ import Data.Newtype (class Newtype)
 import Data.Show.Generic (genericShow)
 import Data.String as String
 import Data.Tuple (Tuple)
-import Data.Tuple.Nested ((/\))
+import Data.Tuple.Nested (type (/\), (/\))
 import Matryoshka (cata, transAna)
 import Matryoshka.Pattern.CoEnvT (CoEnvT(..))
+import Data.Either.Nested (type (\/))
 
 data InlineKind = InlineK
 
@@ -61,3 +62,8 @@ instance showInline :: ( Show a, Show b ) => Show (Inline a b) where
       alg (CoEnvT (Left a)) = show a
       alg (CoEnvT (Right (InlineF (r /\ elements)))) =
         show r <> " [" <> String.joinWith "," elements <> "]"
+
+unwrapInline :: forall a b.  Inline a b -> (a /\ Array (Inline a b)) \/ b
+unwrapInline (Inline c) = case resume c of
+  Left (InlineF (a /\ r)) -> Left (a /\ map Inline r)
+  Right b -> Right b

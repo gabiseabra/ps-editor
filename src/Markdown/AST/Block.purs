@@ -81,3 +81,9 @@ instance showBlock :: ( Show a, Show b ) => Show (Block a b) where
         (NestedF bs) -> "NestedF " <> "[" <> String.joinWith "," bs <> "]"
         b -> show b
     )
+
+blockTag :: forall a b. Block a b -> a
+blockTag (Block c) = head c
+
+blockBody :: forall a b. Block a b -> BlockF b (Block a b)
+blockBody (Block c) = map Block $ tail c
