@@ -20,6 +20,8 @@ import Parsing.String (char, string) as P
 import Parsing.String.Basic (letter) as P
 import Type.Proxy (Proxy(..))
 
+-- | Block elements
+
 data H = H1 | H2 | H3 | H4 | H5 | H6
 
 hn :: H -> Int
@@ -127,6 +129,39 @@ instance blockTypeBlockquote :: BlockType Blockquote where
   blockKind _ = Block
   formatBlock _ = S.multilineBlockF "> "
   parseBlock p = (Blockquote /\ _) <$> S.multilineBlockP (void $ P.string "> ") p
+
+-- | Inline elements
+
+data Span = Span String
+
+derive instance genericSpan :: Generic Span _
+instance eqSpan :: Eq Span where eq = genericEq
+instance showSpan :: Show Span where show = genericShow
+
+data B = B String
+
+derive instance genericB :: Generic B _
+instance eqB :: Eq B where eq = genericEq
+instance showB :: Show B where show = genericShow
+
+data I = I String
+
+derive instance genericI :: Generic I _
+instance eqI :: Eq I where eq = genericEq
+instance showI :: Show I where show = genericShow
+
+data S = S String
+
+derive instance genericS :: Generic S _
+instance eqS :: Eq S where eq = genericEq
+instance showS :: Show S where show = genericShow
+
+data A = A String String
+
+derive instance genericA :: Generic A _
+instance eqA :: Eq A where eq = genericEq
+instance showA :: Show A where show = genericShow
+
 
 type BasicSyntax = Blockquote || Code || H || HR || UL || OL || P
 
