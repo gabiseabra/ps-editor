@@ -2,7 +2,7 @@ module Editor.AST where
 
 import Prelude
 
-import Editor.Lexer (Parser)
+import Editor.Parser (Parser)
 import Data.Tuple.Nested (type (/\))
 
 class Element k a | a -> k where

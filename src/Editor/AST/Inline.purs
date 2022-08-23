@@ -10,9 +10,10 @@ import Data.Eq.Generic (genericEq)
 import Data.Generic.Rep (class Generic)
 import Data.Newtype (class Newtype)
 import Data.Show.Generic (genericShow)
+import Data.String as String
 import Data.Tuple (Tuple)
 import Data.Tuple.Nested ((/\))
-import Matryoshka (transAna)
+import Matryoshka (cata, transAna)
 import Matryoshka.Pattern.CoEnvT (CoEnvT(..))
 
 data InlineKind = InlineK
@@ -46,10 +47,17 @@ derive instance newtypeInline :: Newtype (Inline a r) _
 derive newtype instance eqInline :: ( Eq a, Eq r ) => Eq (Inline a r)
 
 instance bifunctorInline :: Bifunctor Inline where
-  bimap f g (Inline c0) = Inline $ transAna trans c0
+  bimap f g (Inline r) = Inline $ transAna trans r
     where
       trans (CoEnvT (Left b)) = CoEnvT (Left (g b))
       trans (CoEnvT (Right (InlineF (a /\ r)))) = CoEnvT (Right (InlineF (f a /\ r)))
 
 instance functorInline :: Functor (Inline a) where
   map = bimap identity
+
+instance showInline :: ( Show a, Show b ) => Show (Inline a b) where
+  show (Inline r) = r `flip cata` alg
+    where
+      alg (CoEnvT (Left a)) = show a
+      alg (CoEnvT (Right (InlineF (r /\ elements)))) =
+        show r <> " [" <> String.joinWith "," elements <> "]"

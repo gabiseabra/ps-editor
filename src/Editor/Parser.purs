@@ -1,4 +1,4 @@
-module Editor.Lexer where
+module Editor.Parser where
 
 import Prelude
 
@@ -11,22 +11,26 @@ import Data.Identity (Identity)
 import Data.Int as Int
 import Data.List.NonEmpty as NEL
 import Data.Maybe (Maybe(..), maybe)
-import Data.String as String
+import Data.String (fromCodePointArray) as String
 import Data.String.CodeUnits (fromCharArray) as String
-import Debug as Debug
-import Parsing as P
-import Parsing.Combinators as P
-import Parsing.String as P
+import Data.Tuple (fst)
+import Parsing (ParserT, Position(..), fail, initialPos, mapParserT, position) as P
+import Parsing.Combinators (many1, optionMaybe) as P
+import Parsing.Combinators.Array (manyTill_) as P
+import Parsing.String (anyCodePoint, char, eof, string) as P
 import Parsing.Token (digit) as P
 
 data Scope = Scope
-  { indent :: Array (Parser Unit)
+  { indentStack :: Array (Parser Unit)
   , pos :: P.Position
   }
 
 type Parser = P.ParserT String (ReaderT Scope Identity)
 
-emptyScope = Scope { indent: [], pos: P.initialPos } :: Scope
+emptyScope = Scope
+  { indentStack: []
+  , pos: P.initialPos
+  } :: Scope
 
 getScope = lift Reader.ask :: Parser Scope
 
@@ -40,41 +44,35 @@ nl = void $ P.char '\n' :: Parser Unit
 nl' = nl <|> P.eof :: Parser Unit
 indent = void $ P.string "  " :: Parser Unit
 
+-- Consume indentation
 indentP :: Parser Unit
 indentP = getScopeLine >>= case _ of
   0 -> pure unit
   _ -> do
-    Scope { indent } <- getScope
-    foldr (\p p' -> p' *> p) (pure unit) indent
+    Scope { indentStack } <- getScope
+    foldr (\p p' -> p' *> p) (pure unit) indentStack
 
 indented :: forall p. Parser Unit -> Parser p -> Parser p
 indented i p = do
   pos <- P.position
   p `flip P.mapParserT` Reader.local \(Scope s) ->
     Scope
-      { indent: [i] <> s.indent
+      { indentStack: [i] <> s.indentStack
       , pos: pos
       }
 
 indented_ :: forall p. Parser p -> Parser p
 indented_ = indented indent
 
--- Consume the contents of a single line but not the newline character
--- TODO: keep going if the line ends in 2 spaces or backslash
-line :: forall a. Parser a -> Parser String
-line p = do
+inline :: forall a. Parser a -> Parser (Array a)
+inline p = do
   P.optionMaybe P.eof >>= maybe (pure unit) (const $ P.fail "EOF")
-  P.ParseState input1 _ _ <- P.getParserT
-  input2 <- tailRecM go unit
-  pure $ String.take (String.length input1 - String.length input2) input1
-  where
-    go unit =
-      P.optionMaybe nl' >>= case _ of
-        Nothing -> void p $> Loop unit
-        Just _  -> P.getParserT <#> \(P.ParseState i2 _ _) -> Done i2
+  tailRecM go []
+  where go as = P.optionMaybe nl' >>= case _ of
+          Nothing -> p <#> \a -> Loop $ as <> [a]
+          Just _  -> pure $ Done as
 
-line_ :: Parser String
-line_ = line P.anyCodePoint
+lineP = String.fromCodePointArray <$> inline P.anyCodePoint :: Parser String
 
 failMaybe :: forall a. String -> Parser (Maybe a) -> Parser a
 failMaybe err p = p >>= case _ of 
@@ -85,3 +83,13 @@ intP :: Parser Int
 intP = failMaybe "Failed to read digit"
         $ Int.fromString <<< String.fromCharArray <<< NEL.toUnfoldable
        <$> P.many1 P.digit
+
+manyBetween :: forall open close p
+  .  Parser open
+  -> Parser close
+  -> Parser p
+  -> Parser (Array p)
+manyBetween open close p =  open *> manyTill' p close
+
+manyTill' :: forall close p. Parser p -> Parser close -> Parser (Array p)
+manyTill' p close = fst <$> P.manyTill_ p close

@@ -1,15 +1,16 @@
-module Editor.Syntax.Block where
+module Editor.Syntax.Helpers where
 
 import Prelude
 
 import Control.Monad.Rec.Class (Step(..), tailRecM)
 import Data.Array as Array
-import Data.Maybe (Maybe(..))
 import Data.Either (Either)
+import Data.List as List
+import Data.Maybe (Maybe(..))
 import Data.Tuple.Nested (type (/\), (/\))
-import Editor.Lexer (Parser)
-import Editor.Lexer (indent, indentP, indented, indented_, nl, nl') as P
-import Parsing.Combinators (choice, optionMaybe, try) as P
+import Editor.Parser (Parser)
+import Editor.Parser (indent, indentP, indented, indented_, nl, nl') as P
+import Parsing.Combinators (choice, optionMaybe, try, manyTill) as P
 import Parsing.Combinators.Array (many) as P
 
 infixr 6 type Either as ||
@@ -54,3 +55,16 @@ multilineBlockP prefix p
 
 multilineBlockF :: String -> Array String -> Array String
 multilineBlockF prefix = map \a -> prefix <> a
+
+wrappedInlineP :: forall open close p
+  .  Parser open
+  -> Parser close
+  -> Parser p
+  -> Parser (open /\ Array p)
+wrappedInlineP open close p = do
+  a <- open
+  bs <- List.toUnfoldable <$> P.manyTill p close
+  pure (a /\ bs)
+
+wrappedInlineF :: String -> String -> Array String -> Array String
+wrappedInlineF open close as = [open] <> as <> [close]
