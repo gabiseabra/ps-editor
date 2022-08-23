@@ -9,6 +9,7 @@ import Control.Alt ((<|>))
 import Control.Comonad.Cofree (head, tail, (:<))
 import Control.Lazy (fix)
 import Control.Monad.Free (Free, resume, wrap)
+import Control.Monad.Reader (runReader)
 import Data.Array (foldr)
 import Data.Array as Array
 import Data.Either (Either(..))
@@ -17,10 +18,12 @@ import Data.Newtype (class Newtype, modify, unwrap)
 import Data.Newtype as Newtype
 import Data.String (fromCodePointArray)
 import Data.Tuple.Nested ((/\))
-import Markdown.Parser (Parser)
+import Markdown.Parser (Parser, emptyScope)
 import Markdown.Parser as P
+import Parsing (ParseError(..), parseErrorMessage, runParserT)
 import Parsing.Combinators (try)
-import Parsing.String (anyCodePoint)
+import Parsing.Combinators.Array (many)
+import Parsing.String (anyCodePoint, eof)
 import Type.Proxy (Proxy(..))
 
 infixr 6 type Either as ||
@@ -135,3 +138,12 @@ markdownP _ = map f $ blockP Proxy (inlineP Proxy)
     g _ (NestedF a) = NestedF a
     g _ (TextF a) = TextF a
     g _ UnitF = UnitF
+
+parseMarkdown :: forall block inline
+  .  BlockCompiler block
+  => InlineCompiler inline
+  => Syntax block inline
+  -> String
+  -> Either ParseError (Array (Block block (Inline inline String)))
+parseMarkdown s i = runReader (runParserT i p) emptyScope
+  where p = many (markdownP s) <* eof
