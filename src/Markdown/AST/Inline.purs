@@ -51,7 +51,7 @@ instance bifunctorInline :: Bifunctor Inline where
   bimap f g (Inline r) = Inline $ transAna trans r
     where
       trans (CoEnvT (Left b)) = CoEnvT (Left (g b))
-      trans (CoEnvT (Right (InlineF (a /\ r)))) = CoEnvT (Right (InlineF (f a /\ r)))
+      trans (CoEnvT (Right (InlineF (a /\ r')))) = CoEnvT (Right (InlineF (f a /\ r')))
 
 instance functorInline :: Functor (Inline a) where
   map = bimap identity
@@ -60,8 +60,8 @@ instance showInline :: ( Show a, Show b ) => Show (Inline a b) where
   show (Inline r) = r `flip cata` alg
     where
       alg (CoEnvT (Left a)) = show a
-      alg (CoEnvT (Right (InlineF (r /\ elements)))) =
-        show r <> " [" <> String.joinWith "," elements <> "]"
+      alg (CoEnvT (Right (InlineF (a /\ elements)))) =
+        show a <> " [" <> String.joinWith "," elements <> "]"
 
 unwrapInline :: forall a b.  Inline a b -> (a /\ Array (Inline a b)) \/ b
 unwrapInline (Inline c) = case resume c of

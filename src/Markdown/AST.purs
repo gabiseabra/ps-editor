@@ -1,7 +1,5 @@
 module Markdown.AST where
 
-import Prelude
-
 import Markdown.Parser (Parser)
 import Data.Tuple.Nested (type (/\))
 

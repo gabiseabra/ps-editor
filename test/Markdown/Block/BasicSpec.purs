@@ -1,8 +1,8 @@
 module Test.Markdown.Syntax.BasicSpec where
 
-import Markdown.AST.Block
-import Markdown.AST.Inline
-import Markdown.Syntax.Basic
+import Markdown.AST.Inline (Inline(..), InlineF(..))
+import Markdown.AST.Block (Block(..), BlockF(..))
+import Markdown.Syntax.Basic (A(..), B(..), BasicBlockSyntax, BasicInlineSyntax, Blockquote(..), Code(..), H(..), HR(..), I(..), OL(..), P(..), S(..), UL(..), basicSyntax)
 import Prelude
 
 import Control.Comonad.Cofree ((:<))

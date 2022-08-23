@@ -11,9 +11,9 @@ import Data.Show.Generic (genericShow)
 import Data.String (fromCodePointArray) as String
 import Data.String.CodeUnits (fromCharArray) as String
 import Data.Tuple.Nested ((/\))
-import Markdown.AST
-import Markdown.AST.Block
-import Markdown.AST.Inline
+import Markdown.AST (class Element)
+import Markdown.AST.Block (BlockKind(..))
+import Markdown.AST.Inline (InlineKind(..))
 import Markdown.Parser (failMaybe, indentP, inline, intP, nl', manyBetween) as P
 import Markdown.Syntax (type (||), Syntax(..))
 import Markdown.Syntax.Helpers as S

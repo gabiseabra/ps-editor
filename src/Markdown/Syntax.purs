@@ -1,8 +1,8 @@
 module Markdown.Syntax where
 
-import Markdown.AST
-import Markdown.AST.Block
-import Markdown.AST.Inline
+import Markdown.AST (class Element, format, kind, parse)
+import Markdown.AST.Block (Block(..), BlockF(..), BlockKind(..))
+import Markdown.AST.Inline (Inline(..), InlineF(..), InlineKind)
 import Prelude
 
 import Control.Alt ((<|>))
@@ -20,7 +20,7 @@ import Data.String (fromCodePointArray)
 import Data.Tuple.Nested ((/\))
 import Markdown.Parser (Parser, emptyScope)
 import Markdown.Parser as P
-import Parsing (ParseError(..), parseErrorMessage, runParserT)
+import Parsing (ParseError, runParserT)
 import Parsing.Combinators (try)
 import Parsing.Combinators.Array (many)
 import Parsing.String (anyCodePoint, eof)
@@ -43,7 +43,7 @@ appendFreeM :: forall f m
   -> Array (Free f m)
   -> Array (Free f m)
 appendFreeM a as = case (resume a /\ uncons' as) of
-    (Right a /\ Just (Right a' /\ as)) -> pure (a <> a') `Array.(:)` as
+    (Right a /\ Just (Right a' /\ as')) -> pure (a <> a') `Array.(:)` as'
     _ -> a `Array.(:)` as
   where uncons' = Array.uncons >>> map \{ head, tail } -> (resume head /\ tail) 
 
@@ -134,7 +134,7 @@ markdownP _ = map f $ blockP Proxy (inlineP Proxy)
   where
     f a = a `flip modify` \c -> head c :< (g (modify2 collapse)) (tail c)
     -- g :: forall x a b. (Array a -> Array b) -> BlockF a x -> BlockF b x
-    g f (PureF as) = PureF $ f as
+    g h (PureF as) = PureF $ h as
     g _ (NestedF a) = NestedF a
     g _ (TextF a) = TextF a
     g _ UnitF = UnitF
