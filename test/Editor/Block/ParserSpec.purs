@@ -33,6 +33,38 @@ runTest md ast =
   in runReader (runParserT (String.trim md) p) emptyScope
       `shouldEqual` Right ast
 
+simpleHeadingSpec = """
+# H1
+## H2
+### H3
+#### H4
+##### H5
+###### H6
+####### x
+#x
+""" `runTest` 
+  [ B $ inj H1 :< PureF ["H1\n"]
+  , B $ inj H2 :< PureF ["H2\n"]
+  , B $ inj H3 :< PureF ["H3\n"]
+  , B $ inj H4 :< PureF ["H4\n"]
+  , B $ inj H5 :< PureF ["H5\n"]
+  , B $ inj H6 :< PureF ["H6\n"]
+  , B $ inj P :< PureF ["####### x\n"]
+  , B $ inj P :< PureF ["#x"]
+  ] :: Test
+
+simpleThematicBreakSpec = """
+---
+- - -
+***
+* * *
+""" `runTest` 
+  [ B $ inj HR :< UnitF
+  , B $ inj HR :< UnitF
+  , B $ inj HR :< UnitF
+  , B $ inj HR :< UnitF
+  ] :: Test
+
 simpleParagraphSpec = """
 a
 
@@ -74,6 +106,7 @@ nestedListSpec = """
   - ```purs
     code
     ```
+    - * * *
 """ `runTest` 
   [ B $ inj UL :< (BlockF
     [ inj P :< PureF ["a\n"]
@@ -83,6 +116,9 @@ nestedListSpec = """
       ])
     , inj UL :< (BlockF
       [ inj (Code (Just "purs")) :< TextF ["code\n"]
+      , inj UL :< (BlockF
+        [ inj HR :< UnitF
+        ])
       ])
     ])
   ] :: Test
@@ -90,6 +126,8 @@ nestedListSpec = """
 spec :: Spec Unit
 spec =
   describe "mkBlockParser" do
+    it "simpleHeading" simpleHeadingSpec
+    it "simpleThematicBreak" simpleThematicBreakSpec
     it "simpleParagraph" simpleParagraphSpec
     it "simpleCode" simpleCodeSpec
     it "simpleList" simpleListSpec
