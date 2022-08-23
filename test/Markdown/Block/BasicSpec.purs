@@ -1,8 +1,8 @@
-module Test.Editor.Syntax.BasicSpec where
+module Test.Markdown.Syntax.BasicSpec where
 
-import Editor.AST.Block
-import Editor.AST.Inline
-import Editor.Syntax.Basic
+import Markdown.AST.Block
+import Markdown.AST.Inline
+import Markdown.Syntax.Basic
 import Prelude
 
 import Control.Comonad.Cofree ((:<))
@@ -14,8 +14,8 @@ import Data.Tuple.Nested ((/\))
 import Data.Either.Inject (inj)
 import Data.Maybe (Maybe(..))
 import Data.String as String
-import Editor.Parser (emptyScope)
-import Editor.Syntax (markdownP)
+import Markdown.Parser (emptyScope)
+import Markdown.Syntax (markdownP)
 import Effect.Aff (Aff)
 import Effect.Exception (Error)
 import Parsing (runParserT)

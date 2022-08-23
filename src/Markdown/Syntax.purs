@@ -1,8 +1,8 @@
-module Editor.Syntax where
+module Markdown.Syntax where
 
-import Editor.AST
-import Editor.AST.Block
-import Editor.AST.Inline
+import Markdown.AST
+import Markdown.AST.Block
+import Markdown.AST.Inline
 import Prelude
 
 import Control.Alt ((<|>))
@@ -17,8 +17,8 @@ import Data.Newtype (class Newtype, modify, unwrap)
 import Data.Newtype as Newtype
 import Data.String (fromCodePointArray)
 import Data.Tuple.Nested ((/\))
-import Editor.Parser (Parser)
-import Editor.Parser as P
+import Markdown.Parser (Parser)
+import Markdown.Parser as P
 import Parsing.Combinators (try)
 import Parsing.String (anyCodePoint)
 import Type.Proxy (Proxy(..))

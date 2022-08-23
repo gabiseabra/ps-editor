@@ -1,4 +1,4 @@
-module Editor.Syntax.Basic where
+module Markdown.Syntax.Basic where
 
 import Prelude
 
@@ -11,12 +11,12 @@ import Data.Show.Generic (genericShow)
 import Data.String (fromCodePointArray) as String
 import Data.String.CodeUnits (fromCharArray) as String
 import Data.Tuple.Nested ((/\))
-import Editor.AST
-import Editor.AST.Block
-import Editor.AST.Inline
-import Editor.Parser (failMaybe, indentP, inline, intP, nl', manyBetween) as P
-import Editor.Syntax (type (||), Syntax(..))
-import Editor.Syntax.Helpers as S
+import Markdown.AST
+import Markdown.AST.Block
+import Markdown.AST.Inline
+import Markdown.Parser (failMaybe, indentP, inline, intP, nl', manyBetween) as P
+import Markdown.Syntax (type (||), Syntax(..))
+import Markdown.Syntax.Helpers as S
 import Parsing.Combinators (choice, optionMaybe) as P
 import Parsing.Combinators.Array (many, many1) as P
 import Parsing.String (anyCodePoint, char, string) as P

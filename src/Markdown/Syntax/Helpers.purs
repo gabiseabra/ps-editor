@@ -1,4 +1,4 @@
-module Editor.Syntax.Helpers where
+module Markdown.Syntax.Helpers where
 
 import Prelude
 
@@ -8,8 +8,8 @@ import Data.Either (Either)
 import Data.List as List
 import Data.Maybe (Maybe(..))
 import Data.Tuple.Nested (type (/\), (/\))
-import Editor.Parser (Parser)
-import Editor.Parser (indent, indentP, indented, indented_, nl, nl') as P
+import Markdown.Parser (Parser)
+import Markdown.Parser (indent, indentP, indented, indented_, nl, nl') as P
 import Parsing.Combinators (choice, optionMaybe, try, manyTill) as P
 import Parsing.Combinators.Array (many) as P
 

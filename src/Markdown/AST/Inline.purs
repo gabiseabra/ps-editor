@@ -1,4 +1,4 @@
-module Editor.AST.Inline where
+module Markdown.AST.Inline where
 
 import Prelude
 

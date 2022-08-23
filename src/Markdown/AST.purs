@@ -1,8 +1,8 @@
-module Editor.AST where
+module Markdown.AST where
 
 import Prelude
 
-import Editor.Parser (Parser)
+import Markdown.Parser (Parser)
 import Data.Tuple.Nested (type (/\))
 
 class Element k a | a -> k where

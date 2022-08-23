@@ -1,4 +1,4 @@
-module Editor.Parser where
+module Markdown.Parser where
 
 import Prelude
 
