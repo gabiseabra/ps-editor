@@ -136,7 +136,7 @@ appendFreeM :: forall f m
   -> Array (Free f m)
   -> Array (Free f m)
 appendFreeM a as = case (resume a /\ uncons' as) of
-    (Right a /\ Just (Right a' /\ as')) -> pure (a <> a') `Array.(:)` as'
+    (Right x /\ Just (Right x' /\ xs')) -> pure (x <> x') `Array.(:)` xs'
     _ -> a `Array.(:)` as
   where uncons' = Array.uncons >>> map \{ head, tail } -> (resume head /\ tail) 
 
