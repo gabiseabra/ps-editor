@@ -62,10 +62,10 @@ simpleThematicBreakSpec = """
 ***
 * * *
 """ `runTest` 
-  [ Block $ inj HR :< UnitF
-  , Block $ inj HR :< UnitF
-  , Block $ inj HR :< UnitF
-  , Block $ inj HR :< UnitF
+  [ Block $ inj HR :< PureF []
+  , Block $ inj HR :< PureF []
+  , Block $ inj HR :< PureF []
+  , Block $ inj HR :< PureF []
   ] :: Test
 
 simpleParagraphSpec = """
@@ -120,13 +120,14 @@ this is [a link](href); [links can have **nested ~~elements~~ btw**](href)
 simpleCodeSpec = """
 ```
 a
-```
-```code
 b
 ```
+```code
+c
+```
 """ `runTest` 
-  [ Block $ inj (Code Nothing) :< TextF ["a"]
-  , Block $ inj (Code (Just "code")) :< TextF ["b"]
+  [ Block $ inj (Code Nothing ["a", "b"]) :< PureF []
+  , Block $ inj (Code (Just "code") ["c"]) :< PureF []
   ] :: Test
 
 simpleBlockquoteSpec = """
@@ -191,9 +192,9 @@ nestedListSpec = """
       , inj P :< PureF [Inline $ pure "c"]
       ])
     , inj UL :< (NestedF
-      [ inj (Code (Just "purs")) :< TextF ["code"]
+      [ inj (Code (Just "purs") ["code"]) :< PureF []
       , inj UL :< (NestedF
-        [ inj HR :< UnitF
+        [ inj HR :< PureF []
         ])
       ])
     ])

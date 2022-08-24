@@ -7,26 +7,18 @@ Define custom elements with applicative parsers from purescript-parsing,
 ## Syntax Definitions
 
 All markdown elements have to define their own implementation of a parser by
-  declaring an instance of the `Element` type-class.
-  This class is parametrized by:
-- `k` — Either `BlockKind` for block-level elements,
-  or `InlineKind` for inline-level elements;
+  declaring an instance of the `Element` type-class. This class is parametrized by:
+
 - `a` — A `Type` representing a type of markdown element;
+- `k` — Either a type of kind `BlockK` for block-level elements,
+        or the type `InlineK` for line-level elements;
 
 ```purs
 class Element k a | a -> k where
-  kind :: forall proxy. proxy a -> k
-  -- | Makes a parser of an element `a` containing many children `r` from a
-  -- | parser of single tokens `r`. The type of tokens depends on the value
-  -- | of `kind`.
+  -- | A parser of an element `a` containing many children `r` extracted from a
+  -- | parser of individual tokens `r`. The type of tokens depends on `k`.
   parse :: forall r. Parser r -> Parser (a /\ Array r)
 ```
-
-The value of `kind` defines the type of children that an element can contain.
-Inline-level elements can only contain more nested inline elements or strings,
-  so InlineKind only has one constructor: `InlineK`.
-Block-level elements 
-
 
 Both block- and inline-level element types are represented by a nested `Either`
   ADT with all leaves instances of `Element`.
@@ -36,18 +28,19 @@ So extending syntax definitions is as simple as declaring an instance of
 ```purs
 data X = X
 
-instance Element BlockKind X where -- ...
+instance Element NestedK X where parse p = pure (X, [])
 
 type MySyntax = X \/ BasicBlockSyntax
 ```
 
 Parsers are combined from left to right, so the order in which elements are
-  arranged in the syntax definition matters. They must be arranged in the
-  correct order as to evaluate parsers from least to most general.
+  arranged in the syntax definition matters. They must be in the correct order
+  as to evaluate parsers from least to most general.
 For example, the P element is the most general block-level parser because it
   doesn't have any opening or closing tags — it just interprets the remainder of
   the line as a string of inline elements — so it has to be the rightmost element
   in the syntax type definition: `(UL \/ OL \/ P)`.
+
 
 ## Example
 
@@ -57,7 +50,7 @@ Here is an example code which extends the basic syntax with
 ```purs
 import Data.Tuple.Nested ((/\))
 import Data.Either.Nested (type (\/))
-import Markdown.Inline (InlineKind(..))
+import Markdown.Inline (InlineK)
 import Markdown.Syntax (class Element, AST, parseMarkdown)
 import Markdown.Syntax.Basic (BasicBlockSyntax, BasicInlineSyntax)
 import Markdown.Syntax.Helpers (wrappedInlineP) as S
@@ -73,9 +66,7 @@ instance showAt :: Show At where show (At a) = "At " <> show a
 -- | the word in the ADT rather than parsing it as children because I want the
 -- | value to be plain string (not an arbitrary inline element with possibly
 -- | many nesting levels) which I can use later to query against a database.
-instance Element InlineKind At where
-  kind _ = InlineK
-  parse _ = (_ /\ []) <<< At <$> (P.char '@' *> P.word)
+instance Element InlineK At where parse _ = (_ /\ []) <<< At <$> (P.char '@' *> P.word)
 
 data Sup = Sup
 
@@ -83,9 +74,7 @@ instance showSup :: Show Sup where show _ = "Sup"
 
 -- | An element representing an html `sup` tag which consumes nested elements
 -- | between two `^` characters.
-instance Element InlineKind Sup where
-  kind _ = InlineK
-  parse p = S.wrappedInlineP (P.char '^' $> Sup) (P.char '^') p
+instance Element InlineK Sup where parse p = S.wrappedInlineP (P.char '^' $> Sup) (P.char '^') p
 
 -- Extends the basic syntax with our custom inline elements
 type MyAST = AST BasicBlockSyntax (Sup \/ At \/ BasicInlineSyntax)

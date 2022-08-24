@@ -3,6 +3,7 @@ module Markdown.Syntax.Basic where
 import Prelude
 
 import Data.Array.NonEmpty as NEArray
+import Data.Either.Nested (type (\/))
 import Data.Eq.Generic (genericEq)
 import Data.Generic.Rep (class Generic)
 import Data.Maybe (Maybe(..))
@@ -10,10 +11,9 @@ import Data.Show.Generic (genericShow)
 import Data.String (fromCodePointArray) as String
 import Data.String.CodeUnits (fromCharArray) as String
 import Data.Tuple.Nested ((/\))
-import Data.Either.Nested (type (\/))
-import Markdown.Block (BlockKind(..))
-import Markdown.Inline (InlineKind(..))
-import Markdown.Parser (failMaybe, indent, inline, int, nl', manyBetween) as P
+import Markdown.Block (NestedK, PureK)
+import Markdown.Inline (InlineK)
+import Markdown.Parser (failMaybe, indent, inline, int, line, manyBetween, nl') as P
 import Markdown.Syntax (class Element)
 import Markdown.Syntax.Helpers as S
 import Parsing.Combinators (choice, optionMaybe) as P
@@ -29,8 +29,7 @@ derive instance genericB :: Generic B _
 instance eqB :: Eq B where eq = genericEq
 instance showB :: Show B where show = genericShow
 
-instance elementB :: Element InlineKind B where
-  kind _ = InlineK
+instance elementB :: Element InlineK B where
   parse p = P.choice
     [ S.wrappedInlineP (P.string "__" $> B) (P.string "__") p
     , S.wrappedInlineP (P.string "**" $> B) (P.string "**") p
@@ -42,8 +41,7 @@ derive instance genericI :: Generic I _
 instance eqI :: Eq I where eq = genericEq
 instance showI :: Show I where show = genericShow
 
-instance elementI :: Element InlineKind I where
-  kind _ = InlineK
+instance elementI :: Element InlineK I where
   parse p = P.choice
     [ S.wrappedInlineP (P.string "_" $> I) (P.string "_") p
     , S.wrappedInlineP (P.string "*" $> I) (P.string "*") p
@@ -55,14 +53,12 @@ derive instance genericS :: Generic S _
 instance eqS :: Eq S where eq = genericEq
 instance showS :: Show S where show = genericShow
 
-instance elementS :: Element InlineKind S where
-  kind _ = InlineK
+instance elementS :: Element InlineK S where
   parse = S.wrappedInlineP (P.string "~~" $> S) (P.string "~~")
 
 data A = A String
 
-instance elementA :: Element InlineKind A where
-  kind _ = InlineK
+instance elementA :: Element InlineK A where
   parse p = do
     r <- P.manyBetween (P.char '[') (P.char ']') p
     href <- String.fromCodePointArray <$> P.manyBetween (P.char '(') (P.char ')') (P.anyCodePoint)
@@ -99,8 +95,7 @@ derive instance genericH :: Generic H _
 instance eqH :: Eq H where eq = genericEq
 instance showH :: Show H where show = genericShow
 
-instance elementH :: Element BlockKind H where
-  kind _ = PureK
+instance elementH :: Element PureK H where
   parse p = do
     P.indent
     (/\) <$> P.failMaybe "Invalid header"
@@ -113,8 +108,7 @@ derive instance genericHR :: Generic HR _
 instance eqHR :: Eq HR where eq = genericEq
 instance showHR :: Show HR where show = genericShow
 
-instance elementHR :: Element BlockKind HR where
-  kind _ = UnitK
+instance elementHR :: Element PureK HR where
   parse _ = P.indent *> P.choice [ P.char '*', P.char '-' ] >>= \c -> do
     let p = P.optionMaybe (P.char ' ') *> P.char c
     void $ p *> p *> P.many p *> P.nl'
@@ -126,8 +120,7 @@ derive instance genericP :: Generic P _
 instance eqP :: Eq P where eq = genericEq
 instance showP :: Show P where show = genericShow
 
-instance elementP :: Element BlockKind P where
-  kind _ = PureK
+instance elementP :: Element PureK P where
   parse p = (P /\ _) <$> (P.indent *> P.inline p)
 
 data UL = UL
@@ -136,8 +129,7 @@ derive instance genericUL :: Generic UL _
 instance eqUL :: Eq UL where eq = genericEq
 instance showUL :: Show UL where show = genericShow
 
-instance elementUL :: Element BlockKind UL where
-  kind _ = NestedK
+instance elementUL :: Element NestedK UL where
   parse = S.listBlockP (P.string "- " *> pure UL)
 
 data OL = OL Int
@@ -146,19 +138,19 @@ derive instance genericOL :: Generic OL _
 instance eqOL :: Eq OL where eq = genericEq
 instance showOL :: Show OL where show = genericShow
 
-instance elementOL :: Element BlockKind OL where
-  kind _ = NestedK
+instance elementOL :: Element NestedK OL where
   parse = S.listBlockP (OL <$> P.int <* P.string ". ")
 
-data Code = Code (Maybe String)
+data Code = Code (Maybe String) (Array String)
 
 derive instance genericCode :: Generic Code _
 instance eqCode :: Eq Code where eq = genericEq
 instance showCode :: Show Code where show = genericShow
 
-instance elementCode :: Element BlockKind Code where
-  kind _ = TextK
-  parse = S.fencedBlockP (Code <$> openP) closeP
+instance elementCode :: Element PureK Code where
+  parse _ = do
+    (lang /\ code) <- S.fencedBlockP openP closeP P.line
+    pure (Code lang code /\ [])
     where langP =   map (String.fromCharArray <<< NEArray.toUnfoldable)
                 <$> P.optionMaybe (P.many1 P.letter)
           openP = P.string "```" *> langP
@@ -170,8 +162,7 @@ derive instance genericBlockquote :: Generic Blockquote _
 instance eqBlockquote :: Eq Blockquote where eq = genericEq
 instance showBlockquote :: Show Blockquote where show = genericShow
 
-instance elementBlockquote :: Element BlockKind Blockquote where
-  kind _ = NestedK
+instance elementBlockquote :: Element NestedK Blockquote where
   parse p = (Blockquote /\ _) <$> S.multilineBlockP (void $ P.string "> ") p
 
 type BasicBlockSyntax = Blockquote \/ Code \/ H \/ HR \/ UL \/ OL \/ P

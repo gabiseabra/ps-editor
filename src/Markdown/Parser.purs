@@ -72,7 +72,7 @@ inline p = do
           Nothing -> p <#> \a -> Loop $ as <> [a]
           Just _  -> pure $ Done as
 
-lineP = String.fromCodePointArray <$> inline P.anyCodePoint :: Parser String
+line = String.fromCodePointArray <$> inline P.anyCodePoint :: Parser String
 
 failMaybe :: forall a. String -> Parser (Maybe a) -> Parser a
 failMaybe err p = p >>= case _ of 

@@ -6,10 +6,7 @@ import Control.Monad.Free (Free, resume)
 import Data.Bifunctor (class Bifunctor, bimap)
 import Data.Either (Either(..))
 import Data.Eq (class Eq1)
-import Data.Eq.Generic (genericEq)
-import Data.Generic.Rep (class Generic)
 import Data.Newtype (class Newtype)
-import Data.Show.Generic (genericShow)
 import Data.String as String
 import Data.Tuple (Tuple)
 import Data.Tuple.Nested (type (/\), (/\))
@@ -17,11 +14,7 @@ import Matryoshka (cata, transAna)
 import Matryoshka.Pattern.CoEnvT (CoEnvT(..))
 import Data.Either.Nested (type (\/))
 
-data InlineKind = InlineK
-
-derive instance genericInlineKind :: Generic InlineKind _
-instance eqInlineKind :: Eq InlineKind where eq = genericEq
-instance showInlineKind :: Show InlineKind where show = genericShow
+data InlineK
 
 newtype InlineF a b = InlineF (Tuple a (Array b))
 

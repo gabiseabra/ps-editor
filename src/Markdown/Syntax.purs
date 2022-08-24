@@ -1,7 +1,6 @@
 module Markdown.Syntax
   ( AST
   , class Element
-  , kind
   , parse
   , class BlockCompiler
   , mkBlockParser
@@ -26,10 +25,9 @@ import Data.Newtype (class Newtype, modify, unwrap)
 import Data.Newtype as Newtype
 import Data.String (fromCodePointArray)
 import Data.Tuple.Nested (type (/\), (/\))
-import Markdown.Block (Block(..), BlockF(..), BlockKind(..))
-import Markdown.Inline (Inline(..), InlineF(..), InlineKind)
+import Markdown.Block (class IsBlockKind, Block(..), BlockF(..), BlockK(..), reflectBlock)
+import Markdown.Inline (Inline(..), InlineF(..), InlineK)
 import Markdown.Parser (Parser, emptyScope)
-import Markdown.Parser as P
 import Parsing (ParseError, runParserT)
 import Parsing.Combinators (try)
 import Parsing.Combinators.Array (many)
@@ -38,19 +36,8 @@ import Type.Proxy (Proxy(..))
 
 type AST block inline = Array (Block block (Inline inline String))
 
--- | A class for declaring parsers/formatters for individual markdown elements.
--- | - `a` is an ADT representing a type of markdown element, which may contain
--- |    data extracted during parsing.
--- | - `k` is the kind of element—either BlockKind or InlineKind
+class Element :: forall k. k -> Type -> Constraint
 class Element k a | a -> k where
-  -- | Tells which types of children this element can contain.
-  -- | Inline elements can only contain (infintely many) nested elements, so
-  -- | InlineKind only has one constructor.
-  -- | See definition of BlockKind for possible types of block-level elements.
-  -- | @TODO raise kids to the type-level and remove this function 
-  kind :: forall proxy. proxy a -> k
-  -- | A markdown parser of element `a` and its children.
-  -- | - `r` is a token parser which changed depending on the element's `kind`;
   parse :: forall r. Parser r -> Parser (a /\ Array r)
   -- | @TODO
   -- format :: a -> Array String -> Array String
@@ -70,13 +57,12 @@ instance blockCompilerEither ::
     where a = mkBlockParser (f <<< Left) r p
           b = mkBlockParser (f <<< Right) r p
 else instance blockCompilerElement ::
-  ( Element BlockKind a
+  ( Element k a
+  , IsBlockKind k
   ) => BlockCompiler a where
-  mkBlockParser f r = case kind (Proxy :: Proxy a) of
+  mkBlockParser f r = case reflectBlock (Proxy :: Proxy k) of
     NestedK -> \p -> parse p <#> \(a /\ b) -> Block $ f a :< NestedF (map unwrap b)
     PureK -> \_ -> parse r <#> \(a /\ b) -> Block $ f a :< PureF b
-    TextK -> \_ -> parse P.lineP <#> \(a /\ b) -> Block $ f a :< TextF b
-    UnitK -> \_ -> parse (pure unit) <#> \(a /\ _) -> Block $ f a :< UnitF
 
 class InlineCompiler a where
   mkInlineParser :: forall b
@@ -92,7 +78,7 @@ instance inlineCompilerEither ::
     where a = mkInlineParser (f <<< Left) p
           b = mkInlineParser (f <<< Right) p
 else instance inlineCompilerInline ::
-  ( Element InlineKind a
+  ( Element InlineK a
   ) => InlineCompiler a where
   mkInlineParser f p =
     parse p <#> \(a /\ b) ->
@@ -116,8 +102,6 @@ markdownP = map f $ blockP inlineP
     -- g :: forall x a b. (Array a -> Array b) -> BlockF a x -> BlockF b x
     g h (PureF as) = PureF $ h as
     g _ (NestedF a) = NestedF a
-    g _ (TextF a) = TextF a
-    g _ UnitF = UnitF
 
 parseMarkdown :: forall block inline
   .  BlockCompiler block
