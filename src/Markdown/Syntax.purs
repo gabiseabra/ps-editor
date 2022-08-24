@@ -1,8 +1,16 @@
-module Markdown.Syntax where
+module Markdown.Syntax
+  ( AST
+  , class Element
+  , kind
+  , parse
+  , class BlockCompiler
+  , mkBlockParser
+  , class InlineCompiler
+  , mkInlineParser
+  , markdownP
+  , parseMarkdown
+  ) where
 
-import Markdown.AST (class Element, format, kind, parse)
-import Markdown.AST.Block (Block(..), BlockF(..), BlockKind(..))
-import Markdown.AST.Inline (Inline(..), InlineF(..), InlineKind)
 import Prelude
 
 import Control.Alt ((<|>))
@@ -17,7 +25,9 @@ import Data.Maybe (Maybe(..))
 import Data.Newtype (class Newtype, modify, unwrap)
 import Data.Newtype as Newtype
 import Data.String (fromCodePointArray)
-import Data.Tuple.Nested ((/\))
+import Data.Tuple.Nested (type (/\), (/\))
+import Markdown.Block (Block(..), BlockF(..), BlockKind(..))
+import Markdown.Inline (Inline(..), InlineF(..), InlineKind)
 import Markdown.Parser (Parser, emptyScope)
 import Markdown.Parser as P
 import Parsing (ParseError, runParserT)
@@ -26,46 +36,24 @@ import Parsing.Combinators.Array (many)
 import Parsing.String (anyCodePoint, eof)
 import Type.Proxy (Proxy(..))
 
-infixr 6 type Either as ||
+type AST block inline = Array (Block block (Inline inline String))
 
-data Syntax :: Type -> Type -> Type
-data Syntax block inline = Syntax
-
-mergeSyntax :: forall a b c d. Syntax a b -> Syntax c d -> Syntax (a || c) (b || d)
-mergeSyntax _ _ = Syntax
-
-infixr 6 mergeSyntax as ||
-
-appendFreeM :: forall f m
-  .  Functor f
-  => Semigroup m
-  => Free f m
-  -> Array (Free f m)
-  -> Array (Free f m)
-appendFreeM a as = case (resume a /\ uncons' as) of
-    (Right a /\ Just (Right a' /\ as')) -> pure (a <> a') `Array.(:)` as'
-    _ -> a `Array.(:)` as
-  where uncons' = Array.uncons >>> map \{ head, tail } -> (resume head /\ tail) 
-
-collapse :: forall f
-  .  Functor f
-  => Array (Free f String)
-  -> Array (Free f String)
-collapse = foldr appendFreeM []
-
-modify2 :: forall f a t. Newtype t a => Functor f => (f a -> f a) -> f t -> f t
-modify2 f = map Newtype.wrap <<< f <<< map Newtype.unwrap
-
-class FormatterCompiler a where
-  mkFormatter :: a -> Array String -> Array String
-instance formatterCompilerEither ::
-  ( FormatterCompiler a
-  , FormatterCompiler b
-  ) => FormatterCompiler (Either a b) where
-  mkFormatter (Left a) = mkFormatter a
-  mkFormatter (Right b) = mkFormatter b
-else instance formatterCompilerElement :: ( Element k a ) => FormatterCompiler a where
-  mkFormatter = format
+-- | A class for declaring parsers/formatters for individual markdown elements.
+-- | - `a` is an ADT representing a type of markdown element, which may contain
+-- |    data extracted during parsing.
+-- | - `k` is the kind of element—either BlockKind or InlineKind
+class Element k a | a -> k where
+  -- | Tells which types of children this element can contain.
+  -- | Inline elements can only contain (infintely many) nested elements, so
+  -- | InlineKind only has one constructor.
+  -- | See definition of BlockKind for possible types of block-level elements.
+  -- | @TODO raise kids to the type-level and remove this function 
+  kind :: forall proxy. proxy a -> k
+  -- | A markdown parser of element `a` and its children.
+  -- | - `r` is a token parser which changed depending on the element's `kind`;
+  parse :: forall r. Parser r -> Parser (a /\ Array r)
+  -- | @TODO
+  -- format :: a -> Array String -> Array String
 
 class BlockCompiler a where
   mkBlockParser :: forall r b
@@ -110,27 +98,19 @@ else instance inlineCompilerInline ::
     parse p <#> \(a /\ b) ->
       Inline $ wrap (InlineF (f a /\ collapse (map unwrap b)))
 
-blockP :: forall proxy a r
-  .  BlockCompiler a
-  => proxy a
-  -> Parser r
-  -> Parser (Block a r)
-blockP _ r = fix $ mkBlockParser identity r
+blockP :: forall a r.  BlockCompiler a => Parser r -> Parser (Block a r)
+blockP r = fix $ mkBlockParser identity r
 
-inlineP :: forall proxy a
-  .  InlineCompiler a
-  => proxy a
-  -> Parser (Inline a String)
-inlineP _ = fix \f -> try (nodeP f) <|> leafP
+inlineP :: forall a. InlineCompiler a => Parser (Inline a String)
+inlineP = fix \f -> try (nodeP f) <|> leafP
   where nodeP = mkInlineParser identity
         leafP = Inline <<< pure <<< fromCodePointArray <<< pure <$> anyCodePoint
 
 markdownP :: forall block inline
   .  BlockCompiler block
   => InlineCompiler inline
-  => Syntax block inline
-  -> Parser (Block block (Inline inline String))
-markdownP _ = map f $ blockP Proxy (inlineP Proxy)
+  => Parser (Block block (Inline inline String))
+markdownP = map f $ blockP inlineP
   where
     f a = a `flip modify` \c -> head c :< (g (modify2 collapse)) (tail c)
     -- g :: forall x a b. (Array a -> Array b) -> BlockF a x -> BlockF b x
@@ -142,8 +122,29 @@ markdownP _ = map f $ blockP Proxy (inlineP Proxy)
 parseMarkdown :: forall block inline
   .  BlockCompiler block
   => InlineCompiler inline
-  => Syntax block inline
-  -> String
+  => String
   -> Either ParseError (Array (Block block (Inline inline String)))
-parseMarkdown s i = runReader (runParserT i p) emptyScope
-  where p = many (markdownP s) <* eof
+parseMarkdown i = runReader (runParserT i p) emptyScope
+  where p = many markdownP <* eof
+
+--------------------------------------------------------------------------------
+
+appendFreeM :: forall f m
+  .  Functor f
+  => Semigroup m
+  => Free f m
+  -> Array (Free f m)
+  -> Array (Free f m)
+appendFreeM a as = case (resume a /\ uncons' as) of
+    (Right a /\ Just (Right a' /\ as')) -> pure (a <> a') `Array.(:)` as'
+    _ -> a `Array.(:)` as
+  where uncons' = Array.uncons >>> map \{ head, tail } -> (resume head /\ tail) 
+
+collapse :: forall f
+  .  Functor f
+  => Array (Free f String)
+  -> Array (Free f String)
+collapse = foldr appendFreeM []
+
+modify2 :: forall f a t. Newtype t a => Functor f => (f a -> f a) -> f t -> f t
+modify2 f = map Newtype.wrap <<< f <<< map Newtype.unwrap

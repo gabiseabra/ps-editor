@@ -15,7 +15,7 @@ import Data.String (fromCodePointArray) as String
 import Data.String.CodeUnits (fromCharArray) as String
 import Data.Tuple (fst)
 import Parsing (ParserT, Position(..), fail, initialPos, mapParserT, position) as P
-import Parsing.Combinators (many1, optionMaybe) as P
+import Parsing.Combinators (choice, lookAhead, many1, optionMaybe) as P
 import Parsing.Combinators.Array (manyTill_) as P
 import Parsing.String (anyCodePoint, char, eof, string) as P
 import Parsing.Token (digit) as P
@@ -42,11 +42,11 @@ getScopeLine = do
 
 nl = void $ P.char '\n' :: Parser Unit
 nl' = nl <|> P.eof :: Parser Unit
-indent = void $ P.string "  " :: Parser Unit
+indentation = void $ P.string "  " :: Parser Unit
 
 -- Consume indentation
-indentP :: Parser Unit
-indentP = getScopeLine >>= case _ of
+indent :: Parser Unit
+indent = getScopeLine >>= case _ of
   0 -> pure unit
   _ -> do
     Scope { indentStack } <- getScope
@@ -79,8 +79,8 @@ failMaybe err p = p >>= case _ of
   Nothing -> P.fail err
   Just a -> pure a
 
-intP :: Parser Int
-intP = failMaybe "Failed to read digit"
+int :: Parser Int
+int = failMaybe "Failed to read digit"
         $ Int.fromString <<< String.fromCharArray <<< NEL.toUnfoldable
        <$> P.many1 P.digit
 
@@ -93,3 +93,10 @@ manyBetween open close p =  open *> manyTill' p close
 
 manyTill' :: forall close p. Parser p -> Parser close -> Parser (Array p)
 manyTill' p close = fst <$> P.manyTill_ p close
+
+-- A parser that consumes characters until a space, newline, or eof is reached
+-- without consuming the space or newline
+word = String.fromCodePointArray
+    <$> manyTill'
+        P.anyCodePoint
+        (P.lookAhead $ P.choice [void $ P.char ' ',  nl']) :: Parser String

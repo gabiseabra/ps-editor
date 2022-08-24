@@ -1,4 +1,4 @@
-module Markdown.AST.Block where
+module Markdown.Block where
 
 import Prelude
 
@@ -82,8 +82,8 @@ instance showBlock :: ( Show a, Show b ) => Show (Block a b) where
         b -> show b
     )
 
-blockTag :: forall a b. Block a b -> a
-blockTag (Block c) = head c
+tag :: forall a b. Block a b -> a
+tag (Block c) = head c
 
-blockBody :: forall a b. Block a b -> BlockF b (Block a b)
-blockBody (Block c) = map Block $ tail c
+body :: forall a b. Block a b -> BlockF b (Block a b)
+body (Block c) = map Block $ tail c

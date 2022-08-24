@@ -1,8 +1,8 @@
 module Test.Markdown.Syntax.BasicSpec where
 
-import Markdown.AST.Inline (Inline(..), InlineF(..))
-import Markdown.AST.Block (Block(..), BlockF(..))
-import Markdown.Syntax.Basic (A(..), B(..), BasicBlockSyntax, BasicInlineSyntax, Blockquote(..), Code(..), H(..), HR(..), I(..), OL(..), P(..), S(..), UL(..), basicSyntax)
+import Markdown.Inline (Inline(..), InlineF(..))
+import Markdown.Block (Block(..), BlockF(..))
+import Markdown.Syntax.Basic (A(..), B(..), BasicBlockSyntax, BasicInlineSyntax, Blockquote(..), Code(..), H(..), HR(..), I(..), OL(..), P(..), S(..), UL(..))
 import Prelude
 
 import Control.Comonad.Cofree ((:<))
@@ -32,7 +32,7 @@ runTest :: forall m
   -> Array (Block BasicBlockSyntax (Inline BasicInlineSyntax String))
   -> m Unit
 runTest md ast =
-  let p = many (markdownP basicSyntax) <* eof
+  let p = many markdownP <* eof
   in runReader (runParserT (String.trim md) p) emptyScope
       `shouldEqual` Right ast
 
