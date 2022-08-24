@@ -3,7 +3,6 @@ module Markdown.Syntax.Helpers where
 import Prelude
 
 import Control.Monad.Rec.Class (Step(..), tailRecM)
-import Data.Either (Either)
 import Data.List as List
 import Data.Maybe (Maybe(..))
 import Data.Tuple.Nested (type (/\), (/\))
@@ -11,8 +10,6 @@ import Markdown.Parser (Parser)
 import Markdown.Parser (indentation, indent, indented, indented_, nl, nl') as P
 import Parsing.Combinators (choice, optionMaybe, try, manyTill) as P
 import Parsing.Combinators.Array (many) as P
-
-infixr 6 type Either as ||
 
 listBlockP :: forall prefix p
   .  Parser prefix
