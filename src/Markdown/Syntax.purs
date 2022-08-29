@@ -2,114 +2,133 @@ module Markdown.Syntax
   ( AST
   , class Element
   , parse
+  , BlockP
+  , class IsBlock
+  , mkBlockP
   , class BlockCompiler
   , mkBlockParser
   , class InlineCompiler
   , mkInlineParser
   , markdownP
   , parseMarkdown
+  , module Markdown.AST
   ) where
 
 import Prelude
 
 import Control.Alt ((<|>))
-import Control.Comonad.Cofree (head, tail, (:<))
+import Control.Comonad.Env (EnvT(..))
 import Control.Lazy (fix)
-import Control.Monad.Free (Free, resume, wrap)
+import Control.Monad.Free (Free, resume)
 import Control.Monad.Reader (runReader)
 import Data.Array (foldr)
 import Data.Array as Array
+import Data.Bifunctor (bimap)
 import Data.Either (Either(..))
+import Data.Either.Nested (type (\/))
+import Data.Functor.Compose (Compose(..))
 import Data.Maybe (Maybe(..))
-import Data.Newtype (class Newtype, modify, unwrap)
+import Data.Newtype (class Newtype)
 import Data.Newtype as Newtype
 import Data.String (fromCodePointArray)
 import Data.Tuple.Nested (type (/\), (/\))
-import Markdown.Block (class IsBlockKind, Block(..), BlockF(..), BlockK(..), reflectBlock)
-import Markdown.Inline (Inline(..), InlineF(..), InlineK)
-import Markdown.Parser (Parser, emptyScope)
-import Parsing (ParseError, runParserT)
-import Parsing.Combinators (try)
-import Parsing.Combinators.Array (many)
-import Parsing.String (anyCodePoint, eof)
+import Markdown.AST (Block, Inline)
+import Markdown.Parser (Parser)
+import Markdown.Parser (emptyScope) as P
+import Matryoshka (embed)
+import Parsing (ParseError, runParserT, fail) as P
+import Parsing.Combinators (try) as P
+import Parsing.Combinators.Array (many) as P
+import Parsing.String (anyCodePoint, eof) as P
 import Type.Proxy (Proxy(..))
 
-type AST block inline = Array (Block block (Inline inline String))
+type AST block inline = Array (Block block (Array (Inline inline String)))
 
-class Element :: forall k. k -> Type -> Constraint
-class Element k a | a -> k where
-  parse :: forall r. Parser r -> Parser (a /\ Array r)
-  -- | @TODO
-  -- format :: a -> Array String -> Array String
+class Element :: (Type -> Type -> Type) -> Type -> Constraint
+class Element f a | a -> f where
+  parse :: forall b r. Parser (f b r) -> Parser (a /\ Array (f b r))
+
+data BlockP b
+  = NestedP (forall r
+    .  Parser (Block b r)
+    -> Parser (Block b r)
+    )
+  | FlatP (forall i r
+    .  Parser (Inline i r)
+    -> Parser (Block b (Array (Inline i r)))
+    )
+
+class IsBlock :: (Type -> Type -> Type) -> Constraint
+class IsBlock p where
+  mkBlockP :: forall proxy a b.  Element p a => proxy p -> (a -> b) -> BlockP b
+instance IsBlock Block where
+  mkBlockP _ f = NestedP \p -> embed <<< EnvT <<< bimap f (Compose <<< Right) <$> parse p
+instance IsBlock Inline where
+  mkBlockP _ f = FlatP \p -> embed <<< EnvT <<< bimap f (Compose <<< Left) <$> parse p
 
 class BlockCompiler a where
-  mkBlockParser :: forall r b
-    . (a -> b)
-    -> Parser r
-    -> Parser (Block b r)
-    -> Parser (Block b r)
-
-instance blockCompilerEither ::
-  ( BlockCompiler a
-  , BlockCompiler b
-  ) => BlockCompiler (Either a b) where
-  mkBlockParser f r p = try a <|> b
-    where a = mkBlockParser (f <<< Left) r p
-          b = mkBlockParser (f <<< Right) r p
-else instance blockCompilerElement ::
-  ( Element k a
-  , IsBlockKind k
+  mkBlockParser :: forall b i r
+    .  (a -> b)
+    -> Parser (Inline i r)
+    -> Parser (Block b (Array (Inline i r)))
+    -> Parser (Block b (Array (Inline i r)))
+instance blockCompilerVoid :: BlockCompiler Void where
+  mkBlockParser _ _ _ = P.fail "Void"
+else instance blockCompilerEither ::
+  ( BlockCompiler l
+  , BlockCompiler r
+  ) => BlockCompiler (Either l r) where
+  mkBlockParser f i b = P.try l <|> r
+    where l = mkBlockParser (f <<< Left) i b
+          r = mkBlockParser (f <<< Right) i b
+else instance blockCompilerBlock ::
+  ( Element p a
+  , IsBlock p
   ) => BlockCompiler a where
-  mkBlockParser f r = case reflectBlock (Proxy :: Proxy k) of
-    NestedK -> \p -> parse p <#> \(a /\ b) -> Block $ f a :< NestedF (map unwrap b)
-    PureK -> \_ -> parse r <#> \(a /\ b) -> Block $ f a :< PureF b
+  mkBlockParser f i b = case mkBlockP (Proxy :: Proxy p) f of
+    NestedP g -> g b
+    FlatP g -> g i
+
+blockP :: forall b i r. BlockCompiler b => Parser (Inline i r) -> Parser (Block b (Array (Inline i r)))
+blockP = fix <<< mkBlockParser identity
 
 class InlineCompiler a where
-  mkInlineParser :: forall b
-    . (a -> b)
-    -> Parser (Inline b String)
-    -> Parser (Inline b String)
-
-instance inlineCompilerEither ::
-  ( InlineCompiler a
-  , InlineCompiler b
-  ) => InlineCompiler (Either a b) where
-  mkInlineParser f p = try a <|> b
-    where a = mkInlineParser (f <<< Left) p
-          b = mkInlineParser (f <<< Right) p
+  mkInlineParser :: forall i r
+    . ((a /\ Array (Inline i r)) -> (i /\ Array (Inline i r)))
+    -> Parser (Inline i r)
+    -> Parser (Inline i r)
+instance inlineCompilerVoid :: InlineCompiler Void where
+  mkInlineParser _ _ = P.fail "Void"
+else instance inlineCompilerEither ::
+  ( InlineCompiler l
+  , InlineCompiler r
+  ) => InlineCompiler (Either l r) where
+  mkInlineParser f i = P.try l <|> r
+    where l = mkInlineParser (bimap Left identity >>> f) i
+          r = mkInlineParser (bimap Right identity >>> f) i
 else instance inlineCompilerInline ::
-  ( Element InlineK a
+  ( Element Inline a
   ) => InlineCompiler a where
-  mkInlineParser f p =
-    parse p <#> \(a /\ b) ->
-      Inline $ wrap (InlineF (f a /\ collapse (map unwrap b)))
-
-blockP :: forall a r.  BlockCompiler a => Parser r -> Parser (Block a r)
-blockP r = fix $ mkBlockParser identity r
+  mkInlineParser f i = embed <<< Newtype.wrap <<< Right <<< Compose <<< f <$> parse i
 
 inlineP :: forall a. InlineCompiler a => Parser (Inline a String)
-inlineP = fix \f -> try (nodeP f) <|> leafP
-  where nodeP = mkInlineParser identity
-        leafP = Inline <<< pure <<< fromCodePointArray <<< pure <$> anyCodePoint
+inlineP = fix \f -> P.try (nodeP f) <|> leafP
+  where nodeP = mkInlineParser $ bimap identity (modify2 collapse)
+        leafP = Newtype.wrap <<< pure <<< fromCodePointArray <<< pure <$> P.anyCodePoint
 
 markdownP :: forall block inline
   .  BlockCompiler block
   => InlineCompiler inline
-  => Parser (Block block (Inline inline String))
-markdownP = map f $ blockP inlineP
-  where
-    f a = a `flip modify` \c -> head c :< (g (modify2 collapse)) (tail c)
-    -- g :: forall x a b. (Array a -> Array b) -> BlockF a x -> BlockF b x
-    g h (PureF as) = PureF $ h as
-    g _ (NestedF a) = NestedF a
+  => Parser (Block block (Array (Inline inline String)))
+markdownP = map (map (modify2 collapse)) $ blockP inlineP
 
 parseMarkdown :: forall block inline
   .  BlockCompiler block
   => InlineCompiler inline
   => String
-  -> Either ParseError (Array (Block block (Inline inline String)))
-parseMarkdown i = runReader (runParserT i p) emptyScope
-  where p = many markdownP <* eof
+  -> P.ParseError \/ (AST block inline)
+parseMarkdown i = runReader (P.runParserT i p) P.emptyScope
+  where p = P.many markdownP <* P.eof
 
 --------------------------------------------------------------------------------
 
@@ -124,10 +143,11 @@ appendFreeM a as = case (resume a /\ uncons' as) of
     _ -> a `Array.(:)` as
   where uncons' = Array.uncons >>> map \{ head, tail } -> (resume head /\ tail) 
 
-collapse :: forall f
+collapse :: forall f m
   .  Functor f
-  => Array (Free f String)
-  -> Array (Free f String)
+  => Semigroup m
+  => Array (Free f m)
+  -> Array (Free f m)
 collapse = foldr appendFreeM []
 
 modify2 :: forall f a t. Newtype t a => Functor f => (f a -> f a) -> f t -> f t

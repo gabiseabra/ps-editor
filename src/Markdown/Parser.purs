@@ -36,9 +36,9 @@ getScope = lift Reader.ask :: Parser Scope
 
 getScopeLine :: Parser Int
 getScopeLine = do
-  Scope { pos: P.Position { line } } <- getScope
-  P.Position { line: line' } <- P.position
-  pure (line' - line)
+  Scope { pos: P.Position { line: ln } } <- getScope
+  P.Position { line: ln' } <- P.position
+  pure (ln' - ln)
 
 nl = void $ P.char '\n' :: Parser Unit
 nl' = nl <|> P.eof :: Parser Unit
@@ -62,7 +62,7 @@ indented i p = do
       }
 
 indented_ :: forall p. Parser p -> Parser p
-indented_ = indented indent
+indented_ = indented indentation
 
 inline :: forall a. Parser a -> Parser (Array a)
 inline p = do

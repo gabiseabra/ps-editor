@@ -1,40 +1,31 @@
 module Test.Markdown.Syntax.BasicSpec where
 
-import Markdown.Inline (Inline(..), InlineF(..))
-import Markdown.Block (Block(..), BlockF(..))
-import Markdown.Syntax.Basic (A(..), B(..), BasicBlockSyntax, BasicInlineSyntax, Blockquote(..), Code(..), H(..), HR(..), I(..), OL(..), P(..), S(..), UL(..))
 import Prelude
 
-import Control.Comonad.Cofree ((:<))
 import Control.Monad.Error.Class (class MonadThrow)
-import Control.Monad.Free (wrap)
-import Control.Monad.Reader (runReader)
 import Data.Either (Either(..))
-import Data.Tuple.Nested ((/\))
 import Data.Either.Inject (inj)
 import Data.Maybe (Maybe(..))
 import Data.String as String
-import Markdown.Parser (emptyScope)
-import Markdown.Syntax (markdownP)
+import Data.Tuple.Nested ((/\))
 import Effect.Aff (Aff)
 import Effect.Exception (Error)
-import Parsing (runParserT)
-import Parsing.Combinators.Array (many)
-import Parsing.String (eof)
+import Markdown.AST (block, inline)
+import Markdown.Syntax (AST, parseMarkdown)
+import Markdown.Syntax.Basic (A(..), B(..), BasicBlockSyntax, BasicInlineSyntax, Blockquote(..), Code(..), H(..), HR(..), I(..), OL(..), P(..), S(..), UL(..))
 import Test.Spec (Spec, describe, it)
 import Test.Spec.Assertions (shouldEqual)
 
 type Test = Aff Unit
 
+type BasicAST = AST BasicBlockSyntax BasicInlineSyntax
+
 runTest :: forall m
   .  MonadThrow Error m
   => String
-  -> Array (Block BasicBlockSyntax (Inline BasicInlineSyntax String))
+  -> BasicAST
   -> m Unit
-runTest md ast =
-  let p = many markdownP <* eof
-  in runReader (runParserT (String.trim md) p) emptyScope
-      `shouldEqual` Right ast
+runTest md ast = parseMarkdown (String.trim md) `shouldEqual` Right ast
 
 simpleHeadingSpec = """
 # H1
@@ -46,14 +37,14 @@ simpleHeadingSpec = """
 ####### x
 #x
 """ `runTest` 
-  [ Block $ inj H1 :< PureF [Inline $ pure "H1"]
-  , Block $ inj H2 :< PureF [Inline $ pure "H2"]
-  , Block $ inj H3 :< PureF [Inline $ pure "H3"]
-  , Block $ inj H4 :< PureF [Inline $ pure "H4"]
-  , Block $ inj H5 :< PureF [Inline $ pure "H5"]
-  , Block $ inj H6 :< PureF [Inline $ pure "H6"]
-  , Block $ inj P :< PureF [Inline $ pure "####### x"]
-  , Block $ inj P :< PureF [Inline $ pure "#x"]
+  [ block $ inj H1 /\ Left [ pure "H1" ]
+  , block $ inj H2 /\ Left [ pure "H2" ]
+  , block $ inj H3 /\ Left [ pure "H3" ]
+  , block $ inj H4 /\ Left [ pure "H4" ]
+  , block $ inj H5 /\ Left [ pure "H5" ]
+  , block $ inj H6 /\ Left [ pure "H6" ]
+  , block $ inj P /\ Left [ pure "####### x" ]
+  , block $ inj P /\ Left [ pure "#x" ]
   ] :: Test
 
 simpleThematicBreakSpec = """
@@ -62,14 +53,14 @@ simpleThematicBreakSpec = """
 ***
 * * *
 """ `runTest` 
-  [ Block $ inj HR :< PureF []
-  , Block $ inj HR :< PureF []
-  , Block $ inj HR :< PureF []
-  , Block $ inj HR :< PureF []
+  [ block $ inj HR /\ Left []
+  , block $ inj HR /\ Left []
+  , block $ inj HR /\ Left []
+  , block $ inj HR /\ Left []
   ] :: Test
 
 simpleParagraphSpec = """
-a *i* **b** ~~s~~
+*italic* **bold** ~~strike~~
 
 ~~nested **inline *elements***~~
 
@@ -77,40 +68,39 @@ a *i* **b** ~~s~~
 
 this is [a link](href); [links can have **nested ~~elements~~ btw**](href)
 """ `runTest` 
-  [ Block $ inj P :< PureF
-    [ Inline $ pure "a "
-    , Inline $ wrap $ InlineF $ inj I /\ [pure "i"]
-    , Inline $ pure " "
-    , Inline $ wrap $ InlineF $ inj B /\ [pure "b"]
-    , Inline $ pure " "
-    , Inline $ wrap $ InlineF $ inj S /\ [pure "s"]
+  [ block $ inj P /\ Left
+    [ inline $ inj I /\ [ pure "italic" ]
+    , pure " "
+    , inline $ inj B /\ [ pure "bold" ]
+    , pure " "
+    , inline $ inj S /\ [ pure "strike" ]
     ]
-  , Block $ inj P :< PureF []
-  , Block $ inj P :< PureF
-    [ Inline $ wrap $ InlineF $ inj S /\
+  , block $ inj P /\ Left []
+  , block $ inj P /\ Left
+    [ inline $ inj S /\
       [ pure "nested "
-      , wrap $ InlineF $ inj B /\
+      , inline $ inj B /\
         [ pure "inline "
-        , wrap $ InlineF $ inj I /\ [pure "elements"]
+        , inline $ inj I /\ [ pure "elements" ]
         ]
       ]
     ]
-  , Block $ inj P :< PureF []
-  , Block $ inj P :< PureF
-    [ Inline $ wrap $ InlineF $ inj I /\ [pure "this "]
-    , Inline $ pure "isn't"
-    , Inline $ wrap $ InlineF $ inj I /\ [pure " nested"]
+  , block $ inj P /\ Left []
+  , block $ inj P /\ Left
+    [ inline $ inj I /\ [ pure "this " ]
+    , pure "isn't"
+    , inline $ inj I /\ [ pure " nested" ]
     ]
-  , Block $ inj P :< PureF []
-  , Block $ inj P :< PureF
-    [ Inline $ pure "this is "
-    , Inline $ wrap $ InlineF $ inj (A "href") /\ [pure "a link"]
-    , Inline $ pure "; "
-    , Inline $ wrap $ InlineF $ inj (A "href") /\
+  , block $ inj P /\ Left []
+  , block $ inj P /\ Left
+    [ pure "this is "
+    , inline $ inj (A "href") /\ [ pure "a link" ]
+    , pure "; "
+    , inline $ inj (A "href") /\
       [ pure "links can have "
-      , wrap $ InlineF $ inj B /\
+      , inline $ inj B /\
         [ pure "nested "
-        , wrap $ InlineF $ inj S /\ [pure "elements"]
+        , inline $ inj S /\ [pure "elements"]
         , pure " btw"
         ]
       ]
@@ -126,8 +116,8 @@ b
 c
 ```
 """ `runTest` 
-  [ Block $ inj (Code Nothing ["a", "b"]) :< PureF []
-  , Block $ inj (Code (Just "code") ["c"]) :< PureF []
+  [ block $ inj (Code Nothing ["a", "b"]) /\ Left []
+  , block $ inj (Code (Just "code") ["c"]) /\ Left []
   ] :: Test
 
 simpleBlockquoteSpec = """
@@ -138,17 +128,17 @@ simpleBlockquoteSpec = """
 > - a
 >   - b
 """ `runTest` 
-  [ Block $ inj Blockquote :< NestedF
-    [ inj P :< PureF [Inline $ pure "a"]
-    , inj P :< PureF [Inline $ pure "b"]
+  [ block $ inj Blockquote /\ Right
+    [ block $ inj P /\ Left [ pure "a" ]
+    , block $ inj P /\ Left [ pure "b" ]
     ]
-  , Block $ inj P :< PureF []
-  , Block $ inj Blockquote :< NestedF
-    [ inj H1 :< PureF [Inline $ pure "x"]
-    , inj UL :< NestedF
-      [ inj P :< PureF [Inline $ pure "a"]
-      , inj UL :< NestedF
-        [ inj P :< PureF [Inline $ pure "b"]
+  , block $ inj P /\ Left []
+  , block $ inj Blockquote /\ Right
+    [ block $ inj H1 /\ Left [ pure "x" ]
+    , block $ inj UL /\ Right
+      [ block $ inj P /\ Left [ pure "a" ]
+      , block $ inj UL /\ Right
+        [ block $ inj P /\ Left [ pure "b" ]
         ]
       ]
     ]
@@ -159,10 +149,12 @@ simpleUnorderedListSpec = """
 - b
   c
 """ `runTest` 
-  [ Block $ inj UL :< NestedF [ inj P :< PureF [Inline $ pure "a"] ]
-  , Block $ inj UL :< NestedF
-      [ inj P :< PureF [Inline $ pure "b"]
-      , inj P :< PureF [Inline $ pure "c"]
+  [ block $ inj UL /\ Right
+    [ block $ inj P /\ Left [ pure "a" ]
+    ]
+  , block $ inj UL /\ Right
+      [ block $ inj P /\ Left [ pure "b" ]
+      , block $ inj P /\ Left [ pure "c" ]
       ]
   ] :: Test
 
@@ -171,9 +163,15 @@ simpleOrderedListSpec = """
 2. b
 420. c
 """ `runTest` 
-  [ Block $ inj (OL 1) :< (NestedF [ inj P :< PureF [Inline $ pure "a"] ])
-  , Block $ inj (OL 2) :< (NestedF [ inj P :< PureF [Inline $ pure "b"] ])
-  , Block $ inj (OL 420) :< (NestedF [ inj P :< PureF [Inline $ pure "c"] ])
+  [ block $ inj (OL 1) /\ Right
+    [ block $ inj P /\ Left [ pure "a" ]
+    ]
+  , block $ inj (OL 2) /\ Right
+    [ block $ inj P /\ Left [ pure "b" ]
+    ]
+  , block $ inj (OL 420) /\ Right
+    [ block $ inj P /\ Left [ pure "c" ]
+    ]
   ] :: Test
 
 nestedListSpec = """
@@ -185,24 +183,24 @@ nestedListSpec = """
     ```
     - * * *
 """ `runTest` 
-  [ Block $ inj UL :< (NestedF
-    [ inj P :< PureF [Inline $ pure "a"]
-    , inj UL :< (NestedF
-      [ inj P :< PureF [Inline $ pure "b"]
-      , inj P :< PureF [Inline $ pure "c"]
-      ])
-    , inj UL :< (NestedF
-      [ inj (Code (Just "purs") ["code"]) :< PureF []
-      , inj UL :< (NestedF
-        [ inj HR :< PureF []
-        ])
-      ])
-    ])
+  [ block $ inj UL /\ Right
+    [ block $ inj P /\ Left [ pure "a" ]
+    , block $ inj UL /\ Right
+      [ block $ inj P /\ Left [ pure "b" ]
+      , block $ inj P /\ Left [ pure "c" ]
+      ]
+    , block $ inj UL /\ Right
+      [ block $ inj (Code (Just "purs") ["code"]) /\ Left []
+      , block $ inj UL /\ Right 
+        [ block $ inj HR /\ Left []
+        ]
+      ]
+    ]
   ] :: Test
 
 spec :: Spec Unit
 spec =
-  describe "mkBlockParser" do
+  describe "basic syntax" do
     it "simpleHeading" simpleHeadingSpec
     it "simpleThematicBreak" simpleThematicBreakSpec
     it "simpleParagraph" simpleParagraphSpec

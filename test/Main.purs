@@ -9,5 +9,5 @@ import Test.Spec.Runner (runSpec)
 
 main :: Effect Unit
 main = launchAff_ do
-  specs <- discover """Editor\..*Spec"""
+  specs <- discover """Markdown\..*Spec"""
   runSpec [consoleReporter] specs

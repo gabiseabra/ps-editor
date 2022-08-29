@@ -36,6 +36,7 @@ to generate this file without the comments in this block.
   , "tailrec"
   , "transformers"
   , "tuples"
+  , "functors"
   ]
 , packages = ./packages.dhall
 , sources = [ "src/**/*.purs", "test/**/*.purs" ]
