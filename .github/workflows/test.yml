@@ -1,0 +1,5 @@
+name: test
+steps:
+  - uses: actions/checkout@v2
+  - uses: purescript-contrib/setup-purescript@main
+  - run: spago test
